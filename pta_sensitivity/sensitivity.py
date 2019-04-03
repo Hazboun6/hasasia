@@ -4,6 +4,7 @@ from __future__ import print_function
 import numpy as np
 import itertools as it
 
+from .sim import create_design_matrix
 ## Some constants
 yr_sec = 365.25*24*3600
 fyr = 1/yr_sec
@@ -52,9 +53,9 @@ def G_matrix(designmatrix):
 
     return U[:,m:]
 
-def transmission(designmatrix, toas, N=None,
-                 nf=200, fmin=None, fmax=2e-7, freqs=None,
-                 exact_astro_freqs = False, from_G=False):
+def get_transmission(designmatrix, toas, N=None,
+                     nf=200, fmin=None, fmax=2e-7, freqs=None,
+                     exact_astro_freqs = False, from_G=False):
     """
     Calculate the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
@@ -110,6 +111,7 @@ def transmission(designmatrix, toas, N=None,
             ff = np.sort(np.append(ff,[fyr,2*fyr]))
             nf +=2
     else:
+        nf = len(freqs)
         ff = freqs
 
     Tmat = np.zeros(nf, dtype='float64')
@@ -132,18 +134,56 @@ def response(freqs):
     """Timing residual response function."""
     return 1/(12*np.pi*freqs**2)
 
-class sensitivity_curve(object):
+class Pulsar(object):
+    """
+    Class to encode information about individual pulsars.
+    """
+    def __init__(self, toas, toaerrs, phi, theta,
+                 designmatrix=None, N=None):
+        """ """
+        self.toas = toas
+        self.toaerrs = toaerrs
+        self.phi = phi
+        self.theta = theta
+        self.N = N
+        if designmatrix is None:
+            self.designmatrix = create_design_matrix(toas, RADEC=True,
+                                                     PROPER=True, PX=True)
+        else:
+            self.designmatrix = designmatrix
+
+
+class SensitivityCurve(object):
     """
     Class for constructing PTA sensitivity curves.
     """
-    def __init__(self, nf, Tspan, fmin=None, fmax=1e-7):
+    def __init__(self, psrs, nf=400, fmin=None, fmax=1e-7):
+
+        if not isinstance(psrs, list):
+            psrs = [psrs]
+        self.psrs = psrs
+        self.Npsrs = len(psrs)
+        self.phi = [p.phi for p in psrs]
+        self.theta = [p.theta for p in psrs]
+        self.T = np.zeros((self.Npsrs,nf))
         self.nf = nf
-        self.Tspan = Tspan*yr_sec
-        f0 = 1 / Tspan
+        self.Tspan = get_Tspan(psrs)
+        f0 = 1 / self.Tspan
         if fmin is None:
             fmin = f0/5
 
-        self.freqs = np.logspace(np.log10(fmin),np.log10(fmax),nf)
+        self.freqs = np.logspace(np.log10(fmin), np.log10(fmax), nf)
+        [self.set_transmission(ii) for ii in range(self.Npsrs)]
+
+    def set_transmission(self, p_idx):
+        """Calculate transmission functions for pulsar."""
+        M = self.psrs[p_idx].designmatrix
+        toas = self.psrs[p_idx].toas
+        N = self.psrs[p_idx].N
+        if N is None:
+            N = np.diag(1/self.psrs[p_idx].toaerrs**2)
+        self.T[p_idx,:],_,_ = get_transmission(designmatrix=M, toas=toas, N=N,
+                                               freqs=self.freqs, from_G=False)
 
     def S_n(self):
         """Strain power sensitivity. """
@@ -164,14 +204,6 @@ class sensitivity_curve(object):
     def psd_prefit(self):
         """Prefit Residual Power"""
         return None
-
-    def set_psr_sky_location(self,lat,long):
-        """Set Latitude and Longitude of pulsars"""
-        self._lat = lat
-        self._long = long
-
-    def calc_trans():
-        """Calculate transmission functions for pulsars."""
 
     def calc_power():
         """Calculate """
@@ -224,10 +256,10 @@ def HellingsDownsCoeff(phi, theta):
     -------
 
     ThetaIJ : array
-        Array of angles between pairs of pulsars.
+        An Npair-long array of angles between pairs of pulsars.
 
     alphaIJ : array
-        Array of Hellings and Downs relation coefficients.
+        An Npair-long array of Hellings and Downs relation coefficients.
 
     pairs: array
         A 2xNpair array of pair indices corresponding to input order of sky
@@ -253,3 +285,8 @@ def HellingsDownsCoeff(phi, theta):
     # calculate rss (root-sum-squared) of hellings-downs factor
     alphaRSS = np.sqrt(np.sum(alphaIJ**2))
     return np.arccos(cosThetaIJ), alphaIJ, np.array([first,second]), alphaRSS
+
+def get_Tspan(psrs):
+    last = np.amax([p.toas.max() for p in psrs])
+    first = np.amin([p.toas.min() for p in psrs])
+    return last - first
