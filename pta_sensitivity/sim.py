@@ -2,7 +2,9 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-
+from .sensitivity import Pulsar, Spectrum
+day_sec = 24*3600
+yr_sec = 365.25*24*3600
 
 def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
     """
@@ -47,73 +49,69 @@ def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
     return designmatrix
 
 
-#########
+def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
+    """
+    Make a simulated pulsar timing array with simple.
 
-def radec2HellingsDowns(ra, dec, displayFig=False):
+    Parameters
+    ----------
+    timespan : float, array, list
+        Timespan of observations in [years].
 
-    '''
-    calculate hellings-downs factors for a set of M=2 or more pulsars
-    specified by a vector of (ra,dec) coordinates.
-    the pulsars are assumed to be distinct so that the hellings-downs
-    factor only contains the earth-earth correlation term.
+    cad : float, array, list
+        Cadence of observations [number/yr].
 
-    ra       - array of right ascension (0 to 24 hrs)
-    dec      - array of declination (+pi/2 to -pi/2)
-    alphaIJ  - MxM matrix of hellings-downs factors
-    IJ       - mapping from 1,2, ... Np into IJ element of MxM matrix
-    thetaIJ  - angles (radians) between pairs of pulsars indexed from 1,2, ... Np
-    '''
+    sigma : float, array, list
+        TOA RMS Error [sec]
 
-    # extract number of pulsars and error checking
-    M = len(ra)
+    phi : array, list
+        Pulsars equatorial angles.
 
-    # number of distinct pulsar pairs
-    Np = np.int(M*(M-1)/2);
+    theta : array, list
+        Pulsars azimuthal angles.
 
-    # convert (ra,dec) to (theta,phi)
-    theta = np.pi/2. - dec;
-    phi = ra*np.pi/12.;
+    Return
+    ------
+    psrs : list
+        List of `pta_sensitivity.Pulsar()` objects.
 
-    cosTheta = np.cos(theta);
-    sinTheta = np.sin(theta);
+    """
+    #Automatically deal with single floats and arrays.
+    pars = [timespan, cad, sigma, phi, theta]
+    keys = ['timespan', 'cad', 'sigma', 'phi', 'theta']
+    haslen = [isinstance(par,(list,np.ndarray)) for par in pars]
+    if any(haslen):
+        L = [len(par) for par, hl in zip(pars, haslen) if hl]
+        if not len(set(L))==1:
+            raise ValueError('All arrays and lists must be the same length.')
+        else:
+            Npsrs = L[0]
+    elif Npsrs is None:
+        raise ValueError('If no array or lists are provided must set Npsrs!!')
 
-    # calculate hellings-downs factor for these angles
-    cosThetaIJ = np.zeros((M,M))
-    alphaIJ = np.zeros((M,M))
-    for ii in range(M):
-        for jj in range(M):
-            cosThetaIJ[ii,jj] = cosTheta[ii] * cosTheta[jj] \
-                                + sinTheta[ii] * sinTheta[jj] \
-                                * np.cos(phi[ii] - phi[jj])
-            x = (1.-cosThetaIJ[ii,jj])/2.
+    pars = [par * np.ones(Npsrs) if not hl else par
+            for par, hl in zip(pars[:3], haslen[:3])]
+    if all(haslen[3:]):
+        pars.extend([phi,theta])
+    else:
+        raise ValueError('Must provide sky coordinates for all pulsars.')
 
-            if jj==ii:
-                alphaIJ[ii,jj] = 1.
-            else:
-                alphaIJ[ii,jj] = 1.5*x*np.log(x) - 0.25*x/4. + 0.5
+    pars = dict(zip(keys,pars))
 
-    # construct array of angles
-    thetaIJ = np.zeros(Np)
-    alphaHD = np.zeros(Np)
-    IJ = np.zeros((Np,2), dtype=int)
+    psrs = []
 
-    ind = 0
-    for ii in range(M-1):
-        for jj in np.arange(ii+1,M):
-            IJ[ind,0] = ii
-            IJ[ind,1] = jj
-            thetaIJ[ind] = np.arccos(cosThetaIJ[ii,jj])
-            alphaHD[ind] = alphaIJ[ii,jj]
-            ind = ind+1
+    for ii in range(Npsrs):
+        Ntoas = int(np.floor(pars['timespan'][ii]*pars['cad'][ii]))
+        
+        toas = np.linspace(0, pars['timespan'][ii]*yr_sec, Ntoas)
 
-    # calculate rss (root-sum-squared) of hellings-downs factor
-    alphaRSS = np.sqrt(np.sum(alphaHD**2));
+        toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
+        M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
+        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii], theta=pars['theta'][ii],
+                   N=np.diag(toaerrs**2))
+        psrs.append(p)
 
-    # plot if desired
-    if displayFig==True:
-        plt.figure()
-        plt.plot(thetaIJ*180./np.pi, alphaHD, 'k*')
-        plt.xlabel('Angle between pair of pulsars (degrees)' )
-        plt.xlim([0, 180])
+    return psrs
 
-    return alphaIJ, alphaRSS, IJ, thetaIJ
+def sim_SensitivityCurve():
+    return None
