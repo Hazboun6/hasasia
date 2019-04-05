@@ -3,6 +3,7 @@ from __future__ import print_function
 """Main module."""
 import numpy as np
 import itertools as it
+import scipy.stats as sps
 
 from .sim import create_design_matrix
 ## Some constants
@@ -14,23 +15,56 @@ def R_matrix(designmatrix, N):
     Create R matrix as defined in Ellis et al (2013)
     and Demorest et al (2012)
 
-    :param designmatrix: Design matrix
-    :param err: TOA uncertainties [s]
+    Parameters
+    ----------
 
-    :return: R matrix
+    designmatrix : array
+        Design matrix of timing model.
+
+    N : array
+        TOA uncertainties [s]
+
+    Return
+    ------
+    R matrix
 
     """
-    M = designmatrix
-    if N.ndim ==1:
-        Ninv = np.diag(1/N)
-    else:
-        Ninv = np.linalg.inv(N)
+    w = 1/np.sqrt(np.diagonal(N))
+    W = np.diag(w)#np.sqrt(1/N)
+    # w = np.diagonal(W)
 
-    MtWsqM = np.matmul(M.T,np.matmul(Ninv,M))
-    MtWsqMinv = np.linalg.inv(MtWsqM)
-    Id = np.eye(M.shape[0])
+    u, s, v = np.linalg.svd((w * designmatrix.T).T,full_matrices=False)
+#     print(u.shape,s.shape,v.shape)
+    return np.eye(N.shape[0]) - (1/w * np.dot(u, np.dot(u.T, W)).T).T
+    # M = designmatrix
+    # n,m = M.shape
 
-    return Id - np.matmul(np.matmul(M,np.matmul(MtWsqMinv,M.T)),Ninv)
+    # if N.ndim ==1:
+    #     Ninv = np.diag(1/N)
+    # else:
+    #     Ninv = np.linalg.inv(N)
+
+    # L = np.linalg.cholesky(N)
+    # Linv = np.linalg.inv(L)
+    # U,s,_ = np.linalg.svd(M, full_matrices=True)
+    # Id = np.eye(M.shape[0])
+    # S = np.zeros_like(M)
+    # S[:m,:m] = np.diag(s)
+    # inner = np.linalg.inv(np.matmul(S.T,S))
+    # outer = np.matmul(S,np.matmul(inner,S.T))
+    #
+    # return Id - np.matmul(L,np.matmul(np.matmul(U,outer),np.matmul(U.T,Linv)))
+
+    # MtNinvM = np.matmul(M.T,np.matmul(Ninv,M))
+    # try:
+    #     MtNinvMinv = np.linalg.inv(MtWsqM)
+    # except:
+    #     L = np.linalg.cholesky(MtNinvM)
+    #     MtNinvMinv =np.matmul(np.linalg.inv(L.T),np.linalg.inv(L))
+    #
+    # Id = np.eye(M.shape[0])
+    #
+    # return Id - np.matmul(np.matmul(M,np.matmul(MtNinvMinv,M.T)),Ninv)
 
 def G_matrix(designmatrix):
     """
@@ -53,9 +87,8 @@ def G_matrix(designmatrix):
 
     return U[:,m:]
 
-def get_transmission(designmatrix, toas, N=None,
-                     nf=200, fmin=None, fmax=2e-7, freqs=None,
-                     exact_astro_freqs = False, from_G=False):
+def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
+           freqs=None, exact_astro_freqs = False, from_G=False,twofreqs=False):
     """
     Calculate the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
@@ -99,9 +132,10 @@ def get_transmission(designmatrix, toas, N=None,
     ## Prep Correlation
     t1, t2 = np.meshgrid(toas, toas)
     tm = np.abs(t1-t2)
-    T = toas.max()-toas.min()
+
 
     # make filter
+    T = toas.max()-toas.min()
     f0 = 1 / T
     if freqs is None:
         if fmin is None:
@@ -118,9 +152,17 @@ def get_transmission(designmatrix, toas, N=None,
     if from_G:
         G = G_matrix(M)
         m = G.shape[1]
-        for ct, f in enumerate(ff):
-            Tmat[ct] = np.real(np.sum(np.exp(-1j*2*np.pi*f*tm)
-                                      *np.matmul(G,G.T))/m)
+        if twofreqs:
+            Tmat = np.zeros((nf,nf), dtype='float64')
+            for ii, f1 in enumerate(ff):
+                for jj, f2 in enumerate(ff):
+                    Tmat[ii,jj] = np.real(np.sum(np.exp(1j*2*np.pi*(f1*t1-f2*t2))
+                                              *np.matmul(G,G.T))/m)
+        else:
+            for ct, f in enumerate(ff):
+                Tmat[ct] = np.real(np.sum(np.exp(-1j*2*np.pi*f*tm)
+                                        *np.matmul(G,G.T))/m)
+
     else:
         R = R_matrix(M, N)
         N_TOA = M.shape[0]
@@ -130,7 +172,7 @@ def get_transmission(designmatrix, toas, N=None,
     return np.real(Tmat), ff, T
 
 
-def response(freqs):
+def resid_response(freqs):
     """Timing residual response function."""
     return 1/(12*np.pi*freqs**2)
 
@@ -138,106 +180,184 @@ class Pulsar(object):
     """
     Class to encode information about individual pulsars.
     """
-    def __init__(self, toas, toaerrs, phi, theta,
+    def __init__(self, toas, toaerrs, phi=None, theta=None,
                  designmatrix=None, N=None):
         """ """
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
-        self.N = N
+
+        if N is None:
+            self.N = np.diag(toaerrs**2) #N ==> weights
+        else:
+            self.N = N
+
         if designmatrix is None:
             self.designmatrix = create_design_matrix(toas, RADEC=True,
                                                      PROPER=True, PX=True)
         else:
             self.designmatrix = designmatrix
 
+class Spectrum(object):
+    def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
+                 freqs=None, **Tf_kwargs):
+        self.toas = psr.toas
+        self.toaerrs = psr.toaerrs
+        self.phi = psr.phi
+        self.theta = psr.theta
+        self.N = psr.N
+        self.designmatrix = psr.designmatrix
+        self.Tf_kwargs = Tf_kwargs
+        if freqs is None:
+            f0 = 1 / get_Tspan([psr])
+            if fmin is None:
+                fmin = f0/5
+            self.freqs = np.logspace(np.log10(fmin), np.log10(fmax), nf)
+        else:
+            self.freqs = freqs
+
+        self._psd_prefit = np.zeros_like(self.freqs)
+
+    @property
+    def psd_postfit(self):
+        """Postfit Residual Power Spectral Density"""
+        if not hasattr(self, '_psd_postfit'):
+            self._psd_postfit = self.psd_prefit * self.Tf
+        return self._psd_postfit
+
+    @property
+    def psd_prefit(self):
+        """Prefit Residual Power Spectral Density"""
+        if np.all(self._psd_prefit==0):
+            raise ValueError('Must set Prefit Residual Power Spectral Density.')
+            # print('No Prefit Residual Power Spectral Density set.\n'
+            #       'Setting psd_prefit to harmonic mean of toaerrs.')
+            # sigma = sps.hmean(self.toaerrs)
+            # dt = 14*24*3600 # 2 Week Cadence
+            # self.add_white_noise_pow(sigma=sigma,dt=dt)
+
+        return self._psd_prefit
+
+    @property
+    def Tf(self):
+        if not hasattr(self, '_Tf'):
+            self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
+                                  toas=self.toas, N=self.N,
+                                  freqs=self.freqs,**self.Tf_kwargs)
+        return self._Tf
+
+    @property
+    def Sn(self):
+        """Strain power sensitivity. """
+        if not hasattr(self, '_Sn'):
+            self._Sn = self.psd_prefit/resid_response(self.freqs)/self.Tf
+        return self._Sn
+
+    @property
+    def S_R(self):
+        """Residual power sensitivity. """
+        if not hasattr(self, '_Sn'):
+            self._Sn = self.psd_prefit/self.Tf
+        return self._Sn
+
+    @property
+    def h_c(self):
+        """Characteristic strain sensitivity"""
+        if not hasattr(self, '_h_c'):
+            self._h_c = np.sqrt(self.freqs*self.Sn)
+        return self._h_c
+
+    @property
+    def Omega_gw(self):
+        """Energy Density sensitivity"""
+        raise NotImplementedError()
+
+    def add_white_noise_power(self, sigma=None, dt=None, vals=False):
+        white_noise = 2.0 * dt * (sigma)**2 * np.ones_like(self.freqs)
+        self._psd_prefit += white_noise
+        if vals:
+            return white_noise
+
+    def add_red_noise_power(self, A=None, gamma=None, vals=False):
+        """
+        Add power law red noise to the prefit residual power spectral density.
+        As P=A^2*(f/fyr)^-gamma
+
+        Parameters
+        ----------
+        A : float
+            Amplitude of red noise.
+
+        gamma : float
+            Spectral index of red noise noise powerlaw.
+        """
+        ff = self.freqs
+        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
+        self._psd_prefit += red_noise
+        if vals:
+            return red_noise
+
+    def add_noise_power(self,noise):
+        """Add any spectrum of noise."""
+        self._psd_prefit += noise
+
 
 class SensitivityCurve(object):
     """
     Class for constructing PTA sensitivity curves.
     """
-    def __init__(self, psrs, nf=400, fmin=None, fmax=1e-7):
+    def __init__(self, spectra):
+        if not isinstance(spectra, list):
+            raise ValueError('Must provide list of spectra!!')
 
-        if not isinstance(psrs, list):
-            psrs = [psrs]
-        self.psrs = psrs
-        self.Npsrs = len(psrs)
-        self.phi = [p.phi for p in psrs]
-        self.theta = [p.theta for p in psrs]
-        self.T = np.zeros((self.Npsrs,nf))
-        self.nf = nf
-        self.Tspan = get_Tspan(psrs)
-        f0 = 1 / self.Tspan
-        if fmin is None:
-            fmin = f0/5
+        self.Npsrs = len(spectra)
+        phis = np.array([p.phi for p in spectra])
+        thetas = np.array([p.theta for p in spectra])
+        self.Tspan = get_Tspan(spectra)
+        # f0 = 1 / self.Tspan
+        # if fmin is None:
+        #     fmin = f0/5
 
-        self.freqs = np.logspace(np.log10(fmin), np.log10(fmax), nf)
-        [self.set_transmission(ii) for ii in range(self.Npsrs)]
+        #Check to see if all frequencies are equal.
+        freq_check = [sp.freqs for sp in spectra]
+        if np.all(freq_check == spectra[0].freqs):
+            self.freqs = spectra[0].freqs
+        else:
+            raise ValueError('All frequency arrays must match for sensitivity'
+                             ' curve calculation!!')
 
-    def set_transmission(self, p_idx):
-        """Calculate transmission functions for pulsar."""
-        M = self.psrs[p_idx].designmatrix
-        toas = self.psrs[p_idx].toas
-        N = self.psrs[p_idx].N
-        if N is None:
-            N = np.diag(1/self.psrs[p_idx].toaerrs**2)
-        self.T[p_idx,:],_,_ = get_transmission(designmatrix=M, toas=toas, N=N,
-                                               freqs=self.freqs, from_G=False)
+        HDCoff = HellingsDownsCoeff(phis, thetas)
+        self.ThetaIJ, self.alphaIJ, self.pairs, self.alphaRSS = HDCoff
 
-    def S_n(self):
+        self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
+                              for ii,jj in zip(self.pairs[0],self.pairs[1])])
+        self.SnI = np.array([sp.Sn for sp in spectra])
+
+    @property
+    def S_eff(self):
         """Strain power sensitivity. """
-        return None
+        if not hasattr(self, '_S_eff'):
+            ii = self.pairs[0]
+            jj = self.pairs[1]
+            kk = np.arange(len(self.alphaIJ))
+            num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
+            series = num[:,np.newaxis]/(self.SnI[ii]*self.SnI[jj])
+            self._S_eff = np.power(np.sum(series,axis=0),-0.5)
+        return self._S_eff
 
+    @property
     def h_c(self):
         """Characteristic strain sensitivity"""
-        return None
+        if not hasattr(self, '_h_c'):
+            self._h_c = np.sqrt(self.freqs*self.S_eff)
+        return self._h_c
 
+    @property
     def Omega_gw(self):
         """Energy Density sensitivity"""
-        return None
+        raise NotImplementedError()
 
-    def psd_postfit(self):
-        """Postfit Residual Power"""
-        return None
-
-    def psd_prefit(self):
-        """Prefit Residual Power"""
-        return None
-
-    def calc_power():
-        """Calculate """
-
-    def create_white_noise_pow(self, sigma=None, dt=None, WN=None):
-        if WN is None and np.logical_and(sigma is not None, dt is not None):
-            self._white_noise = 2.0 * dt * (sigma)**2
-            self._white_noise *= np.ones_like(self.freqs)
-        elif WN is not None and np.logical_and(sigma is None, dt is None):
-            self._white_noise = WN
-
-        return self._white_noise
-
-    def create_red_noise_pow(self, A=None, gamma=None, RN=None):
-        if RN is None and np.logical_and(A is not None, gamma is not None):
-            ff = self.freqs
-            self._red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2)
-            self._red_noise *= yr_sec**3
-
-        elif RN is not None and np.logical_and(A is None, gamma is None):
-            self._red_noise = RN
-
-        return self._red_noise
-
-    def create_pulsar_term_noise_pow(self, Agw=None, gamma=None, PTN=None):
-        if PTN is None and np.logical_and(Agw is not None, gamma is not None):
-            ff = self.freqs
-            self._pulsar_term_noise = Agw**2*(ff/fyr)**(-gamma)/(12*np.pi**2)
-            self._pulsar_term_noise *= yr_sec**3
-
-        elif PTN is not None and np.logical_and(Agw is None, gamma is None):
-            self._pulsar_term_noise = PTN
-
-        return self._pulsar_term_noise
 
 def HellingsDownsCoeff(phi, theta):
     """
@@ -290,3 +410,11 @@ def get_Tspan(psrs):
     last = np.amax([p.toas.max() for p in psrs])
     first = np.amin([p.toas.min() for p in psrs])
     return last - first
+
+def get_TspanIJ(psr1,psr2):
+    start = np.amax([psr1.toas.min(),psr2.toas.min()])
+    stop = np.amin([psr1.toas.max(),psr2.toas.max()])
+    return stop - start
+
+def SimCurve():
+    raise NotImplementedError()
