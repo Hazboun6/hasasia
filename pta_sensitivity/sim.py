@@ -2,7 +2,12 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-from .sensitivity import Pulsar, Spectrum
+from . import sensitivity as sens
+
+__all__ = ['create_design_matrix',
+           'sim_pta',
+           ]
+
 day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
@@ -62,7 +67,8 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
         Cadence of observations [number/yr].
 
     sigma : float, array, list
-        TOA RMS Error [sec]
+        TOA RMS Error [sec]. Single float, Npsrs long array, or Npsrs x NTOA
+        array excepted.
 
     phi : array, list
         Pulsars equatorial angles.
@@ -99,16 +105,18 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
     pars = dict(zip(keys,pars))
 
     psrs = []
-
+    err_dim = pars['sigma'].ndim
     for ii in range(Npsrs):
         Ntoas = int(np.floor(pars['timespan'][ii]*pars['cad'][ii]))
-        
-        toas = np.linspace(0, pars['timespan'][ii]*yr_sec, Ntoas)
 
-        toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
+        toas = np.linspace(0, pars['timespan'][ii]*yr_sec, Ntoas)
+        if err_dim == 2:
+            toaerrs = pars['sigma'][ii,:]
+        else:
+            toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
         M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
-        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii], theta=pars['theta'][ii],
-                   N=np.diag(toaerrs**2))
+        p = sens.Pulsar(toas, toaerrs, phi=pars['phi'][ii], theta=pars['theta'][ii],
+                        N=np.diag(toaerrs**2))
         psrs.append(p)
 
     return psrs
