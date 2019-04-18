@@ -253,7 +253,7 @@ def get_nw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     elif full_matrix:
         return np.real(TfN)
     else:
-        return np.real(np.diag(TfN))*get_Tspan([psr])
+        return np.real(np.diag(TfN))/get_Tspan([psr])
 
 def resid_response(freqs):
     """Timing residual response function."""
