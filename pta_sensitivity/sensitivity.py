@@ -265,7 +265,30 @@ class Pulsar(object):
     """
     def __init__(self, toas, toaerrs, phi=None, theta=None,
                  designmatrix=None, N=None):
-        """ """
+        """
+        Parameters
+        ----------
+
+        toas : array
+            Pulsar Times of Arrival [sec].
+
+        toaerrs : array
+            Pulsar TOA errors [sec].
+
+        phi : float
+            Ecliptic longitude of pulsar [rad].
+
+        theta : float
+            Ecliptic latitude of pulsar [rad].
+
+        designmatrix : array
+            Design matrix for pulsar's timing model. N_TOA x N_param.
+
+        N : array
+            Covariance matrix for the pulsar. N_TOA x N_TOA. Made from toaerrs
+            if not provided.
+
+        """
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
@@ -363,6 +386,22 @@ class Spectrum(object):
         raise NotImplementedError()
 
     def add_white_noise_power(self, sigma=None, dt=None, vals=False):
+        """
+        Add power law red noise to the prefit residual power spectral density.
+        As P=A^2*(f/fyr)^-gamma*df
+
+        Parameters
+        ----------
+        sigma : float
+            TOA error.
+
+        dt : float
+            Time between observing epochs.
+
+        vals : bool
+            Whether to return the psd values as an array. Otherwise just added
+            to `self.psd_prefit`.
+        """
         white_noise = 2.0 * dt * (sigma)**2 * np.ones_like(self.freqs)
         self._psd_prefit += white_noise
         if vals:
@@ -380,11 +419,15 @@ class Spectrum(object):
 
         gamma : float
             Spectral index of red noise powerlaw.
+
+        vals : bool
+            Whether to return the psd values as an array. Otherwise just added
+            to `self.psd_prefit`.
         """
         ff = self.freqs
-        df = np.diff(ff)
-        df = np.append(df[0],df)
-        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3 * df
+        # df = np.diff(ff)
+        # df = np.append(df[0],df)
+        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3# * df
         self._psd_prefit += red_noise
         if vals:
             return red_noise
