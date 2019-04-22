@@ -11,7 +11,7 @@ from . import sim
 __all__ =['R_matrix',
           'G_matrix',
           'get_Tf',
-          'get_nw_Tf',
+          'get_tmm_noise',
           'resid_response',
           'Pulsar',
           'Spectrum',
@@ -189,11 +189,12 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 
     return np.real(Tmat), ff, T
 
-def get_nw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
-              exact_yr_freqs = False, full_matrix=False,
-              return_Gtilde_Ncal=False):
+def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
+                  exact_yr_freqs = False, full_matrix=False,
+                  return_Gtilde_Ncal=False):
     """
-    Calculate the noise weighted transmission function for a given pulsar.
+    Calculate the timing model marginalized noise power spectral density for a
+    given pulsar.
 
     Parameters
     ----------
@@ -253,7 +254,7 @@ def get_nw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     elif full_matrix:
         return np.real(TfN)
     else:
-        return np.real(np.diag(TfN))/get_Tspan([psr])
+        return np.real(np.diag(TfN)) / get_Tspan([psr])
 
 def resid_response(freqs):
     """Timing residual response function."""
@@ -356,7 +357,7 @@ class Spectrum(object):
     @property
     def Tf(self):
         if not hasattr(self, '_Tf'):
-            self._Tf = get_nw_Tf(psr=self,freqs=self.freqs)
+            self._Tf = get_tmm_noise(psr=self,freqs=self.freqs)
         return self._Tf
 
     @property
@@ -396,7 +397,7 @@ class Spectrum(object):
             TOA error.
 
         dt : float
-            Time between observing epochs.
+            Time between observing epochs in [seconds].
 
         vals : bool
             Whether to return the psd values as an array. Otherwise just added
