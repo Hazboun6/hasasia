@@ -23,6 +23,8 @@ __all__ =['R_matrix',
           'rn_corr_from_psd',
           'quantize_fast',
           'red_noise_powerlaw',
+          'Agwb_from_Seff_plaw',
+          'PI_hc',
           ]
 
 ## Some constants
@@ -349,7 +351,7 @@ class Spectrum(object):
     @property
     def Tf_simp(self):
         if not hasattr(self, '_Tf'):
-            self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
+            self._Tf_simp,_,_ = get_Tf(designmatrix=self.designmatrix,
                                   toas=self.toas, N=self.N,
                                   freqs=self.freqs,**self.Tf_kwargs)
         return self._Tf_simp
@@ -370,15 +372,15 @@ class Spectrum(object):
     @property
     def S_R(self):
         """Residual power sensitivity. """
-        if not hasattr(self, '_Sn'):
-            self._Sn = 1/self.Tf
-        return self._Sn
+        if not hasattr(self, '_S_R'):
+            self._S_R = 1/self.Tf
+        return self._S_R
 
     @property
     def h_c(self):
         """Characteristic strain sensitivity"""
         if not hasattr(self, '_h_c'):
-            self._h_c = np.sqrt(self.freqs*self.Sn)
+            self._h_c = np.sqrt(self.freqs * self.Sn)
         return self._h_c
 
     @property
@@ -447,8 +449,8 @@ class SensitivityCurve(object):
             raise ValueError('Must provide list of spectra!!')
 
         self.Npsrs = len(spectra)
-        phis = np.array([p.phi for p in spectra])
-        thetas = np.array([p.theta for p in spectra])
+        self.phis = np.array([p.phi for p in spectra])
+        self.thetas = np.array([p.theta for p in spectra])
         self.Tspan = get_Tspan(spectra)
         # f0 = 1 / self.Tspan
         # if fmin is None:
@@ -462,12 +464,34 @@ class SensitivityCurve(object):
             raise ValueError('All frequency arrays must match for sensitivity'
                              ' curve calculation!!')
 
-        HDCoff = HellingsDownsCoeff(phis, thetas)
+        self.SnI = np.array([sp.Sn for sp in spectra])
+
+    @property
+    def S_eff(self):
+        """Strain power sensitivity. """
+        return NotImplementedError()
+
+    @property
+    def h_c(self):
+        """Characteristic strain sensitivity"""
+        if not hasattr(self, '_h_c'):
+            self._h_c = np.sqrt(self.freqs * self.S_eff)
+        return self._h_c
+
+    @property
+    def Omega_gw(self):
+        """Energy Density sensitivity"""
+        raise NotImplementedError()
+
+
+class GWBSensitivityCurve(SensitivityCurve):
+    def __init__(self, spectra):
+        super().__init__(spectra)
+        HDCoff = HellingsDownsCoeff(self.phis, self.thetas)
         self.ThetaIJ, self.alphaIJ, self.pairs, self.alphaRSS = HDCoff
 
         self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
                               for ii,jj in zip(self.pairs[0],self.pairs[1])])
-        self.SnI = np.array([sp.Sn for sp in spectra])
 
     @property
     def S_eff(self):
@@ -477,21 +501,21 @@ class SensitivityCurve(object):
             jj = self.pairs[1]
             kk = np.arange(len(self.alphaIJ))
             num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
-            series = num[:,np.newaxis]/(self.SnI[ii]*self.SnI[jj])
-            self._S_eff = np.power(np.sum(series,axis=0),-0.5)
+            series = num[:,np.newaxis]/(self.SnI[ii] * self.SnI[jj])
+            self._S_eff = np.power(np.sum(series, axis=0),-0.5)
         return self._S_eff
 
-    @property
-    def h_c(self):
-        """Characteristic strain sensitivity"""
-        if not hasattr(self, '_h_c'):
-            self._h_c = np.sqrt(self.freqs*self.S_eff)
-        return self._h_c
+class DeterSensitivityCurve(SensitivityCurve):
+    def __init__(self, spectra):
+        super().__init__(spectra)
 
     @property
-    def Omega_gw(self):
-        """Energy Density sensitivity"""
-        raise NotImplementedError()
+    def S_eff(self):
+        """Strain power sensitivity. """
+        if not hasattr(self, '_S_eff'):
+            series = 1/(self.SnI)
+            self._S_eff = np.power((4/5) * np.sum(series, axis=0),-1)
+        return self._S_eff
 
 
 def HellingsDownsCoeff(phi, theta):
@@ -657,3 +681,52 @@ def red_noise_powerlaw(A, gamma, freqs):
     ff = freqs
     df = np.diff(np.append(np.array([0]),ff))
     return A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3 * df
+
+def S_h(A, alpha, freqs):
+    """
+    Add power law red noise to the prefit residual power spectral density.
+    As S_h=A^2*(f/fyr)^(2*alpha)
+
+    Parameters
+    ----------
+    A : float
+        Amplitude of red noise.
+
+    alpha : float
+        Spectral index of red noise powerlaw.
+    """
+    # ff = freqs
+    # df = np.diff(np.append(np.array([0]),ff))
+    return A**2*(ff/fyr)**(2*alpha) #* df
+
+def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
+    """
+    Must supply numpy.ndarrays.
+    """
+    if alpha is None:
+        alpha = (3-gamma)/2
+    else:
+        pass
+
+    df = np.diff(np.append(np.array([0]),freqs))
+
+    if hasattr(alpha,'size'):
+        fS_sqr = freqs**2 * S_eff**2
+        integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
+        integrand /= fS_sqr[:,np.newaxis]
+        fintegral = np.sum(integrand*df[:,np.newaxis],axis=0)
+    else:
+        integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
+        fintegral = np.sum(integrand*df)
+
+    return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
+
+def PI_hc(freqs, Tspan, SNR, S_eff, N=200):
+    '''Power law-integrated characteristic strain.'''
+    alpha = np.linspace(-1.75, 1.25, N)
+    h = Agwb_from_Seff_plaw(freqs=freqs, Tspan=Tspan, SNR=SNR,
+                            S_eff=S_eff, alpha=alpha)
+    plaw = np.dot((freqs[:,np.newaxis]/fyr)**alpha,h[:,np.newaxis]*np.eye(N))
+    PI_sensitivity = np.amax(plaw, axis=1)
+
+    return PI_sensitivity, plaw
