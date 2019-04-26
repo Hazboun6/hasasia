@@ -109,7 +109,7 @@ def G_matrix(designmatrix):
     return U[:,m:]
 
 def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
-           freqs=None, exact_astro_freqs = False, from_G=False,twofreqs=False):
+           freqs=None, exact_astro_freqs = False, from_G=True, twofreqs=False):
     """
     Calculate the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
@@ -187,7 +187,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     else:
         R = R_matrix(M, N)
         for ct, f in enumerate(ff):
-            Tmat[ct] = np.real(np.sum(np.exp(-1j*2*np.pi*f*tm)*R)/N_TOA)
+            Tmat[ct] = np.real(np.sum(np.exp(1j*2*np.pi*f*tm)*R)/N_TOA)
 
     return np.real(Tmat), ff, T
 
@@ -230,7 +230,7 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         if fmin is None:
             fmin = f0/5
         ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float128')
-        if exact_astro_freqs:
+        if exact_yr_freqs:
             ff = np.sort(np.append(ff,[fyr,2*fyr]))
             nf +=2
     else:
@@ -238,25 +238,29 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         ff = freqs
 
     G = G_matrix(psr.designmatrix)
-    Gtilde = np.zeros((freqs.size,G.shape[1]),dtype='complex128')
+    Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
     #N_freqs x N_TOA-N_par
 
     NTOA = psr.toas
-    Gtilde = np.dot(np.exp(-1j*2*np.pi*freqs[:,np.newaxis]*toas),G)
-    # for ii,f in enumerate(freqs):
-    #     Gtilde[ii,:] = np.dot(np.exp(-1j*2*np.pi*f*toas),G)
+    # Note we do not include factors of NTOA or Timespan as they cancel
+    # with the definition of Ncal
+    Gtilde = np.dot(np.exp(-1j*2*np.pi*ff[:,np.newaxis]*toas),G)
     # N_freq x N_TOA-N_par
 
     Ncal = np.matmul(G.T,np.matmul(psr.N,G)) #N_TOA-N_par x N_TOA-N_par
     NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
-    TfN = np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T))/G.shape[0]
+    TfN = np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
     if return_Gtilde_Ncal:
         return np.real(TfN), Gtilde, Ncal
     elif full_matrix:
         return np.real(TfN)
     else:
-        return np.real(np.diag(TfN)) / get_Tspan([psr])
+        df = np.diff(ff)
+        df = np.append(ff[0],df)
+        return np.real(np.diag(TfN)) * df
+
+        #One can divide by Tspan if evenly sampled. /get_Tspan([psr])
 
 def resid_response(freqs):
     """Timing residual response function."""
@@ -350,10 +354,10 @@ class Spectrum(object):
 
     @property
     def Tf_simp(self):
-        if not hasattr(self, '_Tf'):
+        if not hasattr(self, '_Tf_simp'):
             self._Tf_simp,_,_ = get_Tf(designmatrix=self.designmatrix,
                                   toas=self.toas, N=self.N,
-                                  freqs=self.freqs,**self.Tf_kwargs)
+                                  freqs=self.freqs,from_G=True,**self.Tf_kwargs)
         return self._Tf_simp
 
     @property
@@ -469,7 +473,7 @@ class SensitivityCurve(object):
     @property
     def S_eff(self):
         """Strain power sensitivity. """
-        return NotImplementedError()
+        raise NotImplementedError('Effective Strain Power Sensitivity method must be defined.')
 
     @property
     def h_c(self):
@@ -501,7 +505,9 @@ class GWBSensitivityCurve(SensitivityCurve):
             jj = self.pairs[1]
             kk = np.arange(len(self.alphaIJ))
             num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
-            series = num[:,np.newaxis]/(self.SnI[ii] * self.SnI[jj])
+            # self.num = num
+            # self.kk = kk
+            series = num[:,np.newaxis] / (self.SnI[ii] * self.SnI[jj])
             self._S_eff = np.power(np.sum(series, axis=0),-0.5)
         return self._S_eff
 
@@ -513,7 +519,7 @@ class DeterSensitivityCurve(SensitivityCurve):
     def S_eff(self):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
-            series = 1/(self.SnI)
+            series = 1.0 / self.SnI
             self._S_eff = np.power((4/5) * np.sum(series, axis=0),-1)
         return self._S_eff
 
@@ -561,7 +567,7 @@ def HellingsDownsCoeff(phi, theta):
     alphaIJ = [1.5*x*np.log(x) - 0.25*x/4. + 0.5 if x!=0 else 1. for x in X]
     alphaIJ = np.array(alphaIJ)
 
-    # calculate rss (root-sum-squared) of hellings-downs factor
+    # calculate rss (root-sum-squared) of Hellings-Downs factor
     alphaRSS = np.sqrt(np.sum(alphaIJ**2))
     return np.arccos(cosThetaIJ), alphaIJ, np.array([first,second]), alphaRSS
 
