@@ -15,6 +15,8 @@ __all__ =['R_matrix',
           'resid_response',
           'Pulsar',
           'Spectrum',
+          'GWBSensitivityCurve',
+          'DeterSensitivityCurve',
           'SensitivityCurve',
           'HellingsDownsCoeff',
           'get_Tspan',
@@ -256,9 +258,7 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     elif full_matrix:
         return np.real(TfN)
     else:
-        df = np.diff(ff)
-        df = np.append(ff[0],df)
-        return np.real(np.diag(TfN)) * df
+        return np.real(np.diag(TfN)) / get_Tspan([psr])
 
         #One can divide by Tspan if evenly sampled. /get_Tspan([psr])
 
