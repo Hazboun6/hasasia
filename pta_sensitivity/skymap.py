@@ -2,7 +2,10 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-from . import sensitivity as sens
+import astropy.units as u
+import astropy.constants as c
+# from . import sensitivity as sens
+from .sensitivity import SensitivityCurve, resid_response
 
 __all__ = ['',
            '',
@@ -10,51 +13,61 @@ __all__ = ['',
 
 day_sec = 24*3600
 yr_sec = 365.25*24*3600
-c = 2.998e8
-G=1
 
-class sky_map():
+
+class SkySensitivity(SensitivityCurve):
     '''
     Class to make sky maps for deterministic PTA gravitational wave signals.
     Calculated in terms of $\hat{n}=-\hat{k}$.
     Note: $\hat{l}=> -\hat{l}$ and $\hat{m}=>\hat{m}$.
     '''
-    def __init__(self,spec):
-        self.pos = - khat(spec.theta, spec.phi)
+    def __init__(self, spectra, theta_gw, phi_gw):
+        super().__init__(spectra)
+        self.theta_gw = theta_gw
+        self.phi_gw = phi_gw
+        self.pos = - khat(self.thetas, self.phis)
 
-    def eplus(theta,phi):
-        l = lhat(theta,phi)
-        m = mhat(theta,phi)
-        return np.outer(-l, -l) - np.outer(m, m)
+        #Return 3xN array of k,l,m GW position vectors.
+        self.K = khat(self.theta_gw, self.phi_gw)
+        self.L = lhat(self.theta_gw, self.phi_gw)
+        self.M = mhat(self.theta_gw, self.phi_gw)
+        LL = np.einsum('ij, kj->ikj', self.L, self.L)
+        MM = np.einsum('ij, kj->ikj', self.M, self.M)
+        LM = np.einsum('ij, kj->ikj', -self.L, self.M)
+        ML = np.einsum('ij, kj->ikj', self.M, -self.L)
+        self.eplus = LL - MM
+        self.ecross = LM + ML
+        num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
+        denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
+        self.D = num[:,:,:,np.newaxis] / denom[np.newaxis, np.newaxis,:,:]
+        self.sky_response = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)**2
+        self.sky_response += np.einsum('ijkl, ijl ->kl',self.D, self.ecross)**2
+        RNcal = 1.0 / self.SnI
+        summand = RNcal.T[:,:,np.newaxis] * self.sky_response[np.newaxis,:,:]
+        self.SnSky = 1.0 / np.sum(summand, axis=1)
 
-    def ecross(theta,phi):
-        l = lhat(theta,phi)
-        m = mhat(theta,phi)
-        return np.outer(-l, m) + np.outer(m, -l)
+    def SNR(self, h):
+        df = np.diff(self.freqs)
+        df = np.append(df,df[-1])
+        integrand = 48/5 * h[:,np.newaxis]**2 / self.SnSky * df[:,np.newaxis]
+        return np.sqrt(np.sum(integrand, axis=0))
 
-    def D(theta,phi,pos):
-        return 0.5 * np.outer(pos,pos) / (1 + np.dot(pos, -khat(theta,phi)))
 
-    def sky_term(theta,ph,self.pos):
-        pos = self.pos
-        first = np.abs(np.einsum('ij,ij', D(theta,phi,pos), eplus(theta,phi)))
-        second = np.abs(np.einsum('ij,ij', D(theta,phi,pos), ecross(theta,phi)))
-        return first**2 + second**2
+def h_circ(M_c, D_L, f):
+    return ((4*c.c/(D_L*u.Mpc)) * np.power(c.G*M_c*u.Msun/c.c**3,5/3)
+            * np.power(np.pi*f*u.Hz, 2/3))
 
-    def h_circ(M_c,D_L,f):
-        return (4*c/D_l) * np.power(G*M_c/c**2,5/3) * np.power(np.pi*f, 2/3)
-
-def khat(theta,phi):
+def khat(theta, phi):
     '''Returns $\hat{k}$ from paper. Also equal to $-\hat{r}=-\hat{n}$.'''
     return np.array([-np.sin(theta)*np.cos(phi),
                      -np.sin(theta)*np.sin(phi),
-                     np.cos(theta)])
+                     -np.cos(theta)])
 
-def lhat(theta,phi):
+def lhat(theta, phi):
     '''Returns $\hat{l}$ from paper. Also equal to $-\hat{phi}$.'''
-    return np.array([np.sin(phi),-np.cos(phi),0])
+    return np.array([np.sin(phi), -np.cos(phi), np.zeros_like(theta)])
 
-def mhat(theta,phi):
+def mhat(theta, phi):
     '''Returns $\hat{m}$ from paper. Also equal to $-\hat{theta}$.'''
     return np.array([-np.cos(theta)*np.cos(phi),
                      -np.cos(theta)*np.sin(phi),
