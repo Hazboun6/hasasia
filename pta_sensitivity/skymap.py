@@ -33,8 +33,8 @@ class SkySensitivity(SensitivityCurve):
         self.M = mhat(self.theta_gw, self.phi_gw)
         LL = np.einsum('ij, kj->ikj', self.L, self.L)
         MM = np.einsum('ij, kj->ikj', self.M, self.M)
-        LM = np.einsum('ij, kj->ikj', -self.L, self.M)
-        ML = np.einsum('ij, kj->ikj', self.M, -self.L)
+        LM = np.einsum('ij, kj->ikj', self.L, self.M)
+        ML = np.einsum('ij, kj->ikj', self.M, self.L)
         self.eplus = LL - MM
         self.ecross = LM + ML
         num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
@@ -47,10 +47,8 @@ class SkySensitivity(SensitivityCurve):
         self.SnSky = 1.0 / np.sum(summand, axis=1)
 
     def SNR(self, h):
-        df = np.diff(self.freqs)
-        df = np.append(df,df[-1])
-        integrand = 48/5 * h[:,np.newaxis]**2 / self.SnSky * df[:,np.newaxis]
-        return np.sqrt(np.sum(integrand, axis=0))
+        integrand = 48/5 * h[:,np.newaxis]**2 / self.SnSky
+        return np.sqrt(np.trapz(y=integrand, x=self.freqs, axis=0))
 
 
 def h_circ(M_c, D_L, f):
