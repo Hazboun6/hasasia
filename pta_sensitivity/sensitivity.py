@@ -395,7 +395,6 @@ class Spectrum(object):
     def add_white_noise_power(self, sigma=None, dt=None, vals=False):
         """
         Add power law red noise to the prefit residual power spectral density.
-        As P=A^2*(f/fyr)^-gamma*df
 
         Parameters
         ----------
@@ -505,8 +504,6 @@ class GWBSensitivityCurve(SensitivityCurve):
             jj = self.pairs[1]
             kk = np.arange(len(self.alphaIJ))
             num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
-            # self.num = num
-            # self.kk = kk
             series = num[:,np.newaxis] / (self.SnI[ii] * self.SnI[jj])
             self._S_eff = np.power(np.sum(series, axis=0),-0.5)
         return self._S_eff

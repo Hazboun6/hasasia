@@ -7,7 +7,7 @@ import astropy.constants as c
 # from . import sensitivity as sens
 from .sensitivity import SensitivityCurve, resid_response
 
-__all__ = ['',
+__all__ = ['SkySensitivity',
            '',
            ]
 
@@ -52,8 +52,9 @@ class SkySensitivity(SensitivityCurve):
 
 
 def h_circ(M_c, D_L, f):
-    return ((4*c.c/(D_L*u.Mpc)) * np.power(c.G*M_c*u.Msun/c.c**3,5/3)
-            * np.power(np.pi*f*u.Hz, 2/3))
+    return (c.c / (D_L * u.Mpc) * np.sqrt(5 * np.pi/24)
+            * np.power(c.G * M_c * u.Msun/c.c**3, 5/6)
+            * np.power(np.pi * f * u.Hz, -7/6))
 
 def khat(theta, phi):
     '''Returns $\hat{k}$ from paper. Also equal to $-\hat{r}=-\hat{n}$.'''
@@ -62,11 +63,11 @@ def khat(theta, phi):
                      -np.cos(theta)])
 
 def lhat(theta, phi):
-    '''Returns $\hat{l}$ from paper. Also equal to $-\hat{phi}$.'''
+    '''Returns $\hat{l}$ from paper. Also equal to $-\hat{\phi}$.'''
     return np.array([np.sin(phi), -np.cos(phi), np.zeros_like(theta)])
 
 def mhat(theta, phi):
-    '''Returns $\hat{m}$ from paper. Also equal to $-\hat{theta}$.'''
+    '''Returns $\hat{m}$ from paper. Also equal to $-\hat{\theta}$.'''
     return np.array([-np.cos(theta)*np.cos(phi),
                      -np.cos(theta)*np.sin(phi),
                      np.sin(theta)])
