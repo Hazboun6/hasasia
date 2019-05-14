@@ -175,17 +175,13 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     if from_G:
         G = G_matrix(M)
         m = G.shape[1]
+        Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
+        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
+        Tmat = np.matmul(np.conjugate(Gtilde),Gtilde.T)/N_TOA
         if twofreqs:
-            Tmat = np.zeros((nf,nf), dtype='float64')
-            for ii, f1 in enumerate(ff):
-                for jj, f2 in enumerate(ff):
-                    Tmat[ii,jj] = np.real(np.sum(np.exp(1j*2*np.pi*(f1*t1-f2*t2))
-                                              *np.matmul(G,G.T))/N_TOA)
+            pass
         else:
-            for ct, f in enumerate(ff):
-                Tmat[ct] = np.real(np.sum(np.exp(-1j*2*np.pi*f*tm)
-                                        *np.matmul(G,G.T))/N_TOA)
-
+            Tmat = np.real(np.diag(Tmat))
     else:
         R = R_matrix(M, N)
         for ct, f in enumerate(ff):
@@ -246,7 +242,7 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     NTOA = psr.toas
     # Note we do not include factors of NTOA or Timespan as they cancel
     # with the definition of Ncal
-    Gtilde = np.dot(np.exp(-1j*2*np.pi*ff[:,np.newaxis]*toas),G)
+    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
     # N_freq x N_TOA-N_par
 
     Ncal = np.matmul(G.T,np.matmul(psr.N,G)) #N_TOA-N_par x N_TOA-N_par
