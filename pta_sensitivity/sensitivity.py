@@ -179,7 +179,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
         Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
         Tmat = np.matmul(np.conjugate(Gtilde),Gtilde.T)/N_TOA
         if twofreqs:
-            pass
+            Tmat = np.real(Tmat)
         else:
             Tmat = np.real(np.diag(Tmat))
     else:
@@ -255,8 +255,6 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(TfN)
     else:
         return np.real(np.diag(TfN)) / get_Tspan([psr])
-
-        #One can divide by Tspan if evenly sampled. /get_Tspan([psr])
 
 def resid_response(freqs):
     """Timing residual response function."""
