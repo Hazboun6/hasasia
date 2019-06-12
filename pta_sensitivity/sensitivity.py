@@ -526,7 +526,7 @@ class DeterSensitivityCurve(SensitivityCurve):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
-            series = t_I / self.SnI
+            series = t_I[:,np.newaxis] / self.SnI
             self._S_eff = np.power((4./5.) * np.sum(series, axis=0),-1)
         return self._S_eff
 
