@@ -726,16 +726,16 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
     else:
         pass
 
-    df = np.diff(np.append(np.array([0]),freqs))
+    # df = np.diff(np.append(np.array([0]),freqs))
 
     if hasattr(alpha,'size'):
         fS_sqr = freqs**2 * S_eff**2
         integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
         integrand /= fS_sqr[:,np.newaxis]
-        fintegral = np.sum(integrand*df[:,np.newaxis],axis=0)
+        fintegral = np.trapz(integrand, x=freqs,axis=0)
     else:
         integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
-        fintegral = np.sum(integrand*df)
+        fintegral = np.trapz(integrand, x=freqs)
 
     return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
 
