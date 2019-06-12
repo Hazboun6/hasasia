@@ -2,20 +2,20 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
+import scipy.special as spec
 import astropy.units as u
 import astropy.constants as c
-# from . import sensitivity as sens
-from .sensitivity import SensitivityCurve, resid_response
+from .sensitivity import DeterSensitivityCurve, resid_response, get_dt
 
 __all__ = ['SkySensitivity',
-           '',
+           'h_circ',
            ]
 
 day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
 
-class SkySensitivity(SensitivityCurve):
+class SkySensitivity(DeterSensitivityCurve):
     '''
     Class to make sky maps for deterministic PTA gravitational wave signals.
     Calculated in terms of $\hat{n}=-\hat{k}$.
@@ -39,22 +39,72 @@ class SkySensitivity(SensitivityCurve):
         self.ecross = LM + ML
         num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
         denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
-        self.D = num[:,:,:,np.newaxis] / denom[np.newaxis, np.newaxis,:,:]
-        self.sky_response = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)**2
-        self.sky_response += np.einsum('ijkl, ijl ->kl',self.D, self.ecross)**2
-        RNcal = 1.0 / self.SnI
-        summand = RNcal.T[:,:,np.newaxis] * self.sky_response[np.newaxis,:,:]
-        self.SnSky = 1.0 / np.sum(summand, axis=1)
+        self.D = num[:,:,:,np.newaxis]/denom[np.newaxis, np.newaxis,:,:]
+        self.Fplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
+        self.Fcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
+        self.sky_response = self.Fplus**2 + self.Fcross**2
 
     def SNR(self, h):
-        integrand = 48/5 * h[:,np.newaxis]**2 / self.SnSky
+        integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
         return np.sqrt(np.trapz(y=integrand, x=self.freqs, axis=0))
 
+    def A_gwb(self, h_div_A, SNR=1):
+        '''
+        Method to return a skymap of amplitudes needed to see signal the
+        specified signal, given the specified SNR.
 
-def h_circ(M_c, D_L, f):
-    return (c.c / (D_L * u.Mpc) * np.sqrt(5 * np.pi/24)
-            * np.power(c.G * M_c * u.Msun/c.c**3, 5/6)
-            * np.power(np.pi * f * u.Hz, -7/6))
+        Parameters
+        ----------
+        h_div_A : array
+            An array that represents the frequency dependence of a signal
+            that has been divided by the amplitude. Must cover the same
+            frequencies covered by the Skymap.freqs .
+
+        Returns
+        -------
+        An array representing the skymap of amplitudes needed to see the
+        given signal.
+        '''
+        integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
+        return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
+
+    @property
+    def S_eff(self):
+        """Strain power sensitivity. """
+        if not hasattr(self, '_S_eff'):
+            self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
+        return self._S_eff
+
+    @property
+    def S_SkyI(self):
+        """Per Pulsar Strain power sensitivity. """
+        if not hasattr(self, '_S_eff'):
+            t_I = self.T_I / self.Tspan
+            RNcalInv = t_I[:,np.newaxis] / self.SnI
+            self._S_SkyI = (RNcalInv.T[:,:,np.newaxis]
+                               * self.sky_response[np.newaxis,:,:])
+        return self._S_SkyI
+
+    @property
+    def S_effSky(self):
+        return self.S_eff
+
+    @property
+    def h_c(self):
+        """Characteristic strain sensitivity"""
+        if not hasattr(self, '_h_c'):
+            self._h_c = np.sqrt(self.freqs[:,np.newaxis] * self.S_eff)
+        return self._h_c
+
+
+def h_circ(M_c, D_L, f0, Tspan, f):
+    return h0_circ(M_c, D_L, f0) * Tspan * (np.sinc(Tspan*(f-f0))
+                                            + np.sinc(Tspan*(f+f0)))
+
+def h0_circ(M_c, D_L, f0):
+    return (4*c.c / (D_L * u.Mpc)
+            * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
+            * np.power(np.pi * f0 * u.Hz, 2/3))
 
 def khat(theta, phi):
     '''Returns $\hat{k}$ from paper. Also equal to $-\hat{r}=-\hat{n}$.'''

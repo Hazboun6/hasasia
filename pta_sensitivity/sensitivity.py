@@ -5,6 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import mpmath
+from astropy import units as u
 
 from . import sim
 
@@ -258,7 +259,7 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
 
 def resid_response(freqs):
     """Timing residual response function."""
-    return 1/(12*np.pi*freqs**2)
+    return 1/(12 * np.pi**2 * freqs**2)
 
 class Pulsar(object):
     """
@@ -502,16 +503,31 @@ class GWBSensitivityCurve(SensitivityCurve):
             self._S_eff = np.power(np.sum(series, axis=0),-0.5)
         return self._S_eff
 
+    @property
+    def S_effIJ(self):
+        """Strain power sensitivity. """
+        if not hasattr(self, '_S_effIJ'):
+            ii = self.pairs[0]
+            jj = self.pairs[1]
+            kk = np.arange(len(self.alphaIJ))
+            num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
+            self._S_effIJ =  np.sqrt((self.SnI[ii] * self.SnI[jj])
+                                     / num[:,np.newaxis])
+
+        return self._S_effIJ
+
 class DeterSensitivityCurve(SensitivityCurve):
     def __init__(self, spectra):
         super().__init__(spectra)
+        self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
 
     @property
     def S_eff(self):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
-            series = 1.0 / self.SnI
-            self._S_eff = np.power((4/5) * np.sum(series, axis=0),-1)
+            t_I = self.T_I / self.Tspan
+            series = t_I / self.SnI
+            self._S_eff = np.power((4./5.) * np.sum(series, axis=0),-1)
         return self._S_eff
 
 
@@ -578,13 +594,18 @@ def get_TspanIJ(psr1,psr2):
     stop = np.amin([psr1.toas.max(),psr2.toas.max()])
     return stop - start
 
-def corr_from_psd(freqs, psd, toas):
-    # t1, t2 = np.meshgrid(toas, toas)
-    # tm = np.abs(t1-t2)
-    tm = np.sqrt(psd)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
-    # integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])
-    integrand = np.matmul(tm,np.conjugate(tm.T))
-    return np.real(integrand)#np.sum(integrand, axis=2)
+def corr_from_psd(freqs, psd, toas, fast=True):
+    if fast:
+        df = np.diff(freqs)
+        df = np.append(df,df[-1])
+        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+        integrand = np.matmul(tm, np.conjugate(tm.T))
+        return np.real(integrand)
+    else: #Makes much larger arrays, but uses np.trapz
+        t1, t2 = np.meshgrid(toas, toas)
+        tm = np.abs(t1-t2)
+        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 def rn_corr_from_psd(toas, fL, Amp, alpha=1/2):
     #Calculate taus
@@ -676,8 +697,8 @@ def red_noise_powerlaw(A, gamma, freqs):
         Spectral index of red noise powerlaw.
     """
     ff = freqs
-    df = np.diff(np.append(np.array([0]),ff))
-    return A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3 * df
+    # df = np.diff(np.append(np.array([0]),ff))
+    return A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3 #* df
 
 def S_h(A, alpha, freqs):
     """
@@ -727,3 +748,33 @@ def PI_hc(freqs, Tspan, SNR, S_eff, N=200):
     PI_sensitivity = np.amax(plaw, axis=1)
 
     return PI_sensitivity, plaw
+
+def get_dt(toas):
+    '''Returns average dt between observation epochs given toas.'''
+    toas = make_quant(toas, u.s)
+    return np.round(np.diff(np.unique(np.round(toas.to('day')))).mean())
+
+def make_quant(param, default_unit):
+    """Convenience function to intialize a parameter as an astropy quantity.
+    param == parameter to initialize.
+    default_unit == string that matches an astropy unit, set as
+                    default for this parameter.
+
+    returns:
+        an astropy quantity
+
+    example:
+        self.f0 = make_quant(f0,'MHz')
+    """
+    default_unit = u.core.Unit(default_unit)
+    if hasattr(param, 'unit'):
+        try:
+            param.to(default_unit)
+        except u.UnitConversionError:
+            raise ValueError("Quantity {0} with incompatible unit {1}"
+                             .format(param, default_unit))
+        quantity = param
+    else:
+        quantity = param * default_unit
+
+    return quantity
