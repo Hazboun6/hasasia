@@ -491,6 +491,12 @@ class GWBSensitivityCurve(SensitivityCurve):
         self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
                               for ii,jj in zip(self.pairs[0],self.pairs[1])])
 
+    def SNR(self, Sh):
+        integrand = Sh**2 / self.S_eff**2
+        return np.sqrt(2.0 * self.Tspan * np.trapz(y=integrand,
+                                                   x=self.freqs,
+                                                   axis=0))
+
     @property
     def S_eff(self):
         """Strain power sensitivity. """
