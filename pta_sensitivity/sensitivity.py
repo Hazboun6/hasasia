@@ -721,7 +721,7 @@ def S_h(A, alpha, freqs):
     """
     # ff = freqs
     # df = np.diff(np.append(np.array([0]),ff))
-    return A**2*(freqs/fyr)**(2*alpha) #* df
+    return A**2*(freqs/fyr)**(2*alpha) / freqs#* df
 
 def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
     """
