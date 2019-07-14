@@ -594,34 +594,6 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
-def rn_corr_from_psd(toas, fL, Amp, alpha=1/2):
-    #Calculate taus
-    t1, t2 = np.meshgrid(toas, toas)
-    tau = np.abs(t1-t2).flatten()
-
-    #Ignore zero values along diagonal
-    hyp1F2 = [mpmath.hyp1f2(alpha-1,1/2.,alpha,-(np.pi*fL*t)**2)
-              if t!=0 else 0 for t in tau] #Calculate all nonzero values
-    hyp1F2 = np.array(hyp1F2).astype('float')
-    tau[tau==0]=1
-    hyp1F2 *= ((fL*tau)**(2*(alpha-1)))/(2*(1-alpha))
-    hyp1F2.resize(toas.size, toas.size)
-    tau.resize(toas.size, toas.size)
-    second_term = (2*np.pi)**(2*(alpha-1)) * np.cos(np.pi*alpha)
-    try:
-        second_term *= float(mpmath.gamma(2*(alpha-1)))
-    except ValueError:
-        second_term *= 1e40#mpmath.gamma(2*(alpha-1))
-    coeff = tau**2 * (fyr*tau)**(-2*alpha) / 12 / np.pi**2
-    corr = Amp**2 * coeff*(hyp1F2 + second_term)
-
-    corr_diag = Amp**2 * (fL**(2*(alpha-1)) * fyr**(-2*alpha)) / (2-2*alpha)
-    corr_diag *= np.eye(toas.size)
-
-    corr -= np.diag(np.diagonal(corr))
-    corr += corr_diag
-    return corr
-
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     """
     Function to quantize and average TOAs by observation epoch. Used especially
@@ -670,7 +642,7 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
 def SimCurve():
     raise NotImplementedError()
 
-def red_noise_powerlaw(A, gamma, freqs):
+def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
     """
     Add power law red noise to the prefit residual power spectral density.
     As P=A^2*(f/fyr)^-gamma*df
@@ -682,7 +654,15 @@ def red_noise_powerlaw(A, gamma, freqs):
 
     gamma : float
         Spectral index of red noise powerlaw.
+
+    freqs : array
+        Frequencies at which to calculate the red noise power law.
     """
+    if gamma is None and alpha is not None:
+        gamma = 3-2*alpha
+    elif ((gamma is None and alpha is None)
+          or (gamma is not None and alpha is not None)):
+        ValueError('Must specify one version of spectral index.')
 
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
 
