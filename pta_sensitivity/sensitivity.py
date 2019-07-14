@@ -12,7 +12,7 @@ from . import sim
 __all__ =['R_matrix',
           'G_matrix',
           'get_Tf',
-          'get_tmm_noise',
+          'get_inw_Tf',
           'resid_response',
           'Pulsar',
           'Spectrum',
@@ -53,21 +53,8 @@ def R_matrix(designmatrix, N):
     R matrix
 
     """
-#     w = 1/np.sqrt(np.diagonal(N))
-#     W = np.diag(w)#np.sqrt(1/N)
-#     # w = np.diagonal(W)
-#
-#     u, s, v = np.linalg.svd((w * designmatrix.T).T,full_matrices=False)
-# #     print(u.shape,s.shape,v.shape)
-#     return np.eye(N.shape[0]) - (1/w * np.dot(u, np.dot(u.T, W)).T).T
     M = designmatrix
     n,m = M.shape
-
-    # if N.ndim ==1:
-    #     Ninv = np.diag(1/N)
-    # else:
-    #     Ninv = np.linalg.inv(N)
-
     L = np.linalg.cholesky(N)
     Linv = np.linalg.inv(L)
     U,s,_ = np.linalg.svd(np.matmul(Linv,M), full_matrices=True)
@@ -78,17 +65,6 @@ def R_matrix(designmatrix, N):
     outer = np.matmul(S,np.matmul(inner,S.T))
 
     return Id - np.matmul(L,np.matmul(np.matmul(U,outer),np.matmul(U.T,Linv)))
-
-    # MtNinvM = np.matmul(M.T,np.matmul(Ninv,M))
-    # try:
-    #     MtNinvMinv = np.linalg.inv(MtWsqM)
-    # except:
-    #     L = np.linalg.cholesky(MtNinvM)
-    #     MtNinvMinv =np.matmul(np.linalg.inv(L.T),np.linalg.inv(L))
-    #
-    # Id = np.eye(M.shape[0])
-    #
-    # return Id - np.matmul(np.matmul(M,np.matmul(MtNinvMinv,M.T)),Ninv)
 
 def G_matrix(designmatrix):
     """
@@ -190,12 +166,13 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 
     return np.real(Tmat), ff, T
 
-def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
-                  exact_yr_freqs = False, full_matrix=False,
-                  return_Gtilde_Ncal=False):
+def get_inw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
+               exact_yr_freqs = False, full_matrix=False,
+               return_Gtilde_Ncal=False):
     """
-    Calculate the timing model marginalized noise power spectral density for a
-    given pulsar.
+    Calculate the inverse-noise-wieghted transmission function for a given
+    pulsar. This calculates \mathcal{N}^{-1}(f,f') and \mathcal{N}^{-1}(f) in
+    [1], see Equations (19-20).
 
     Parameters
     ----------
@@ -218,7 +195,7 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     Returns
     -------
 
-    noise weighted transmission function
+    inverse-noise-weighted transmission function
 
     """
     toas = psr.toas
@@ -258,7 +235,10 @@ def get_tmm_noise(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(np.diag(TfN)) / get_Tspan([psr])
 
 def resid_response(freqs):
-    """Timing residual response function."""
+    """
+    Returns the timing residual response function for a pulsar across as set of
+    frequencies. See Equation (53) in [1].
+    """
     return 1/(12 * np.pi**2 * freqs**2)
 
 class Pulsar(object):
@@ -358,7 +338,7 @@ class Spectrum(object):
     @property
     def Tf(self):
         if not hasattr(self, '_Tf'):
-            self._Tf = get_tmm_noise(psr=self,freqs=self.freqs)
+            self._Tf = get_inw_Tf(psr=self,freqs=self.freqs)
         return self._Tf
 
     @property
@@ -467,7 +447,8 @@ class SensitivityCurve(object):
     @property
     def S_eff(self):
         """Strain power sensitivity. """
-        raise NotImplementedError('Effective Strain Power Sensitivity method must be defined.')
+        raise NotImplementedError('Effective Strain Power Sensitivity'
+                                  'method must be defined.')
 
     @property
     def h_c(self):
@@ -486,7 +467,7 @@ class GWBSensitivityCurve(SensitivityCurve):
     def __init__(self, spectra):
         super().__init__(spectra)
         HDCoff = HellingsDownsCoeff(self.phis, self.thetas)
-        self.ThetaIJ, self.alphaIJ, self.pairs, self.alphaRSS = HDCoff
+        self.ThetaIJ, self.chiIJ, self.pairs, self.chiRSS = HDCoff
 
         self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
                               for ii,jj in zip(self.pairs[0],self.pairs[1])])
@@ -503,8 +484,8 @@ class GWBSensitivityCurve(SensitivityCurve):
         if not hasattr(self, '_S_eff'):
             ii = self.pairs[0]
             jj = self.pairs[1]
-            kk = np.arange(len(self.alphaIJ))
-            num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
+            kk = np.arange(len(self.chiIJ))
+            num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]**2
             series = num[:,np.newaxis] / (self.SnI[ii] * self.SnI[jj])
             self._S_eff = np.power(np.sum(series, axis=0),-0.5)
         return self._S_eff
@@ -515,8 +496,8 @@ class GWBSensitivityCurve(SensitivityCurve):
         if not hasattr(self, '_S_effIJ'):
             ii = self.pairs[0]
             jj = self.pairs[1]
-            kk = np.arange(len(self.alphaIJ))
-            num = self.T_IJ[kk] / self.Tspan * self.alphaIJ[kk]**2
+            kk = np.arange(len(self.chiIJ))
+            num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]**2
             self._S_effIJ =  np.sqrt((self.SnI[ii] * self.SnI[jj])
                                      / num[:,np.newaxis])
 
@@ -556,14 +537,14 @@ def HellingsDownsCoeff(phi, theta):
     ThetaIJ : array
         An Npair-long array of angles between pairs of pulsars.
 
-    alphaIJ : array
+    chiIJ : array
         An Npair-long array of Hellings and Downs relation coefficients.
 
     pairs: array
         A 2xNpair array of pair indices corresponding to input order of sky
         coordinates.
 
-    alphaRSS : float
+    chiRSS : float
         Root-sum-squared value of all Hellings-Downs coefficients.
 
     """
@@ -577,12 +558,12 @@ def HellingsDownsCoeff(phi, theta):
                     + np.sin(theta[first]) * np.sin(theta[second]) \
                     * np.cos(phi[first] - phi[second])
     X = (1. - cosThetaIJ) / 2.
-    alphaIJ = [1.5*x*np.log(x) - 0.25*x/4. + 0.5 if x!=0 else 1. for x in X]
-    alphaIJ = np.array(alphaIJ)
+    chiIJ = [1.5*x*np.log(x) - 0.25*x/4. + 0.5 if x!=0 else 1. for x in X]
+    chiIJ = np.array(chiIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
-    alphaRSS = np.sqrt(np.sum(alphaIJ**2))
-    return np.arccos(cosThetaIJ), alphaIJ, np.array([first,second]), alphaRSS
+    chiRSS = np.sqrt(np.sum(chiIJ**2))
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
 
 def get_Tspan(psrs):
     """
@@ -702,14 +683,13 @@ def red_noise_powerlaw(A, gamma, freqs):
     gamma : float
         Spectral index of red noise powerlaw.
     """
-    ff = freqs
-    # df = np.diff(np.append(np.array([0]),ff))
-    return A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3 #* df
+
+    return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
 
 def S_h(A, alpha, freqs):
     """
     Add power law red noise to the prefit residual power spectral density.
-    As S_h=A^2*(f/fyr)^(2*alpha)
+    As S_h=A^2*(f/fyr)^(2*alpha)/f
 
     Parameters
     ----------
@@ -718,10 +698,12 @@ def S_h(A, alpha, freqs):
 
     alpha : float
         Spectral index of red noise powerlaw.
+
+    freqs : array
+        Array of frequencies at which to calculate S_h.
     """
-    # ff = freqs
-    # df = np.diff(np.append(np.array([0]),ff))
-    return A**2*(freqs/fyr)**(2*alpha) / freqs#* df
+
+    return A**2*(freqs/fyr)**(2*alpha) / freqs
 
 def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
     """
@@ -731,8 +713,6 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
         alpha = (3-gamma)/2
     else:
         pass
-
-    # df = np.diff(np.append(np.array([0]),freqs))
 
     if hasattr(alpha,'size'):
         fS_sqr = freqs**2 * S_eff**2
