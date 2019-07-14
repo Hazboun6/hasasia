@@ -54,9 +54,11 @@ def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
     return designmatrix
 
 
-def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
+def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
+            A_rn=None, alpha=None, freqs=None):
     """
-    Make a simulated pulsar timing array with simple.
+    Make a simulated pulsar timing array. Using the available parameters,
+    the function returns a list of pulsar objects encoding them.
 
     Parameters
     ----------
@@ -67,14 +69,28 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
         Cadence of observations [number/yr].
 
     sigma : float, array, list
-        TOA RMS Error [sec]. Single float, Npsrs long array, or Npsrs x NTOA
-        array excepted.
+        TOA RMS Error [sec]. Single float, Npsrs long array,
+        or Npsrs x NTOA array excepted.
 
     phi : array, list
-        Pulsars equatorial angles.
+        Pulsar's longitude in ecliptic coordinates.
 
     theta : array, list
-        Pulsars azimuthal angles.
+        Pulsar's colatitude in ecliptic coordinates.
+
+    Npsrs : int, optional
+        Number of pulsars. Only needed if all pulsars have the same
+        noise characteristics.
+
+    A_rn : float, optional
+        Red noise amplitude to be injected for each pulsar.
+
+    alpha : float, optional
+        Red noise spectral index to be injected for each pulsar.
+
+    freqs : array, optional
+        Array of frequencies at which to calculate the red noise. Same
+        array used for all pulsars.
 
     Return
     ------
@@ -83,21 +99,35 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
 
     """
     #Automatically deal with single floats and arrays.
-    pars = [timespan, cad, sigma, phi, theta]
-    keys = ['timespan', 'cad', 'sigma', 'phi', 'theta']
+    if A_rn is None and alpha is None:
+        pars = [timespan, cad, sigma, phi, theta]
+        keys = ['timespan', 'cad', 'sigma', 'phi', 'theta']
+        stop = 3
+    elif None in [A_rn,alpha,freqs]:
+        err_msg = 'A_rn, alpha and freqs must all be specified for '
+        err_msg += 'in order to build C_rn.'
+        raise ValueError(err_msg)
+    else:
+        pars = [timespan, cad, sigma, A_rn, alpha, phi, theta]
+        keys = ['timespan', 'cad', 'sigma', 'A_rn', 'alpha',
+                'phi', 'theta']
+        stop = 5
+
     haslen = [isinstance(par,(list,np.ndarray)) for par in pars]
     if any(haslen):
         L = [len(par) for par, hl in zip(pars, haslen) if hl]
         if not len(set(L))==1:
-            raise ValueError('All arrays and lists must be the same length.')
+            err_msg = 'All arrays and lists must be the same length.'
+            raise ValueError(err_msg)
         else:
             Npsrs = L[0]
     elif Npsrs is None:
-        raise ValueError('If no array or lists are provided must set Npsrs!!')
+        err_msg = 'If no array or lists are provided must set Npsrs!!'
+        raise ValueError(err_msg)
 
     pars = [par * np.ones(Npsrs) if not hl else par
-            for par, hl in zip(pars[:3], haslen[:3])]
-    if all(haslen[3:]):
+            for par, hl in zip(pars[:stop], haslen[:stop])]
+    if all(haslen[stop:]):
         pars.extend([phi,theta])
     else:
         raise ValueError('Must provide sky coordinates for all pulsars.')
@@ -114,12 +144,19 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None):
             toaerrs = pars['sigma'][ii,:]
         else:
             toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
+
+        N=np.diag(toaerrs**2)
+        if 'A_rn' in keys:
+            plaw = red_noise_powerlaw(A=pars['A_rn'],
+                                      alpha=pars['alpha'],
+                                      freqs=freqs)
+            corr += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
         M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
-        p = sens.Pulsar(toas, toaerrs, phi=pars['phi'][ii], theta=pars['theta'][ii],
-                        N=np.diag(toaerrs**2))
+        p = sens.Pulsar(toas, toaerrs, phi=pars['phi'][ii],
+                        theta=pars['theta'][ii], N=N)
         psrs.append(p)
 
     return psrs
 
 def sim_SensitivityCurve():
-    return None
+    raise NotImplementedError()
