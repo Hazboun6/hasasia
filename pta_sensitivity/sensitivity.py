@@ -4,7 +4,6 @@ from __future__ import print_function
 import numpy as np
 import itertools as it
 import scipy.stats as sps
-import mpmath
 from astropy import units as u
 
 from . import sim
@@ -567,7 +566,7 @@ def HellingsDownsCoeff(phi, theta):
 
 def get_Tspan(psrs):
     """
-    Returns the total timespan from a list of Pulsar objects, psrs.
+    Returns the total timespan from a list or arry of Pulsar objects, psrs.
     """
     last = np.amax([p.toas.max() for p in psrs])
     first = np.amin([p.toas.min() for p in psrs])
@@ -582,6 +581,33 @@ def get_TspanIJ(psr1,psr2):
     return stop - start
 
 def corr_from_psd(freqs, psd, toas, fast=True):
+    """
+    Calculates the correlation matrix over a set of TOAs for a given power
+    spectral density.
+
+    Parameters
+    ----------
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    psd : array
+        Power spectral density to use in calculation of correlation matrix.
+
+    toas : array
+        Pulsar times-of-arrival to use in correlation matrix.
+
+    fast : bool, optional
+        Fast mode uses a matix inner product, while the slower mode uses the
+        numpy.trapz function which is slower, but more accurate.
+
+    Returns
+    -------
+
+    corr : array
+        A 2-dimensional array which represents the correlation matrix for the
+        given set of TOAs.
+    """
     if fast:
         df = np.diff(freqs)
         df = np.append(df,df[-1])

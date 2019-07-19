@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Tests for `pta_sensitivity` package."""
+"""Tests for `hasasia` package."""
 
 import pytest
 
 
-from pta_sensitivity import pta_sensitivity
+from hasasia import hasasia
 
 
 @pytest.fixture
