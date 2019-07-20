@@ -20,7 +20,7 @@ A Python package to calculate gravitational-wave sensitivity curves for pulsar t
 
 
 * Free software: MIT license
-* Documentation: https://pta-sensitivity.readthedocs.io.
+* Documentation: https://hasasia.readthedocs.io.
 
 
 Features
