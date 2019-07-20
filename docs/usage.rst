@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use pta_sensitivity in a project::
+To use hasasia in a project::
 
-    import pta_sensitivity
+    import hasasia

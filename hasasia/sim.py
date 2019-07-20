@@ -95,7 +95,7 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
     Return
     ------
     psrs : list
-        List of `pta_sensitivity.Pulsar()` objects.
+        List of `hasasia.Pulsar()` objects.
 
     """
     #Automatically deal with single floats and arrays.

@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/Hazboun6/pta_sensitivity/issues.
+Report bugs at https://github.com/Hazboun6/hasasia/issues.
 
 If you are reporting a bug, please include:
 
@@ -38,14 +38,14 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-pta_sensitivity could always use more documentation, whether as part of the
-official pta_sensitivity docs, in docstrings, or even on the web in blog posts,
+hasasia could always use more documentation, whether as part of the
+official hasasia docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to file an issue at https://github.com/Hazboun6/pta_sensitivity/issues.
+The best way to send feedback is to file an issue at https://github.com/Hazboun6/hasasia/issues.
 
 If you are proposing a feature:
 
@@ -57,17 +57,17 @@ If you are proposing a feature:
 Get Started!
 ------------
 
-Ready to contribute? Here's how to set up `pta_sensitivity` for local development.
+Ready to contribute? Here's how to set up `hasasia` for local development.
 
-1. Fork the `pta_sensitivity` repo on GitHub.
+1. Fork the `hasasia` repo on GitHub.
 2. Clone your fork locally::
 
-    $ git clone git@github.com:your_name_here/pta_sensitivity.git
+    $ git clone git@github.com:your_name_here/hasasia.git
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv pta_sensitivity
-    $ cd pta_sensitivity/
+    $ mkvirtualenv hasasia
+    $ cd hasasia/
     $ python setup.py develop
 
 4. Create a branch for local development::
@@ -79,7 +79,7 @@ Ready to contribute? Here's how to set up `pta_sensitivity` for local developmen
 5. When you're done making changes, check that your changes pass flake8 and the
    tests, including testing other Python versions with tox::
 
-    $ flake8 pta_sensitivity tests
+    $ flake8 hasasia tests
     $ python setup.py test or py.test
     $ tox
 
@@ -103,7 +103,7 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 3. The pull request should work for Python 2.7, 3.4, 3.5 and 3.6, and for PyPy. Check
-   https://travis-ci.org/Hazboun6/pta_sensitivity/pull_requests
+   https://travis-ci.org/Hazboun6/hasasia/pull_requests
    and make sure that the tests pass for all supported Python versions.
 
 Tips
@@ -111,7 +111,7 @@ Tips
 
 To run a subset of tests::
 
-$ py.test tests.test_pta_sensitivity
+$ py.test tests.test_hasasia
 
 
 Deploying

@@ -51,7 +51,7 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 lint: ## check style with flake8
-	flake8 pta_sensitivity tests
+	flake8 hasasia tests
 
 test: ## run tests quickly with the default Python
 	py.test
@@ -60,15 +60,15 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source pta_sensitivity -m pytest
+	coverage run --source hasasia -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/pta_sensitivity.rst
+	rm -f docs/hasasia.rst
 	rm -f docs/modules.rst
-	sphinx-apidoc -o docs/ pta_sensitivity
+	sphinx-apidoc -o docs/ hasasia
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html

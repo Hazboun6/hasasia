@@ -1,4 +1,4 @@
-* pta_sensitivity version:
+* hasasia version:
 * Python version:
 * Operating System:
 
