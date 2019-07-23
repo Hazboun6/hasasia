@@ -3,7 +3,7 @@ from __future__ import print_function
 """Main module."""
 import numpy as np
 from .sensitivity import Pulsar
-
+from .utils import create_design_matrix
 __all__ = ['sim_pta',
            ]
 
