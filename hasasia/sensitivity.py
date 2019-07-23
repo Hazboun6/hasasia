@@ -6,7 +6,7 @@ import itertools as it
 import scipy.stats as sps
 from astropy import units as u
 
-from .sim import create_design_matrix
+from .utils import create_design_matrix
 
 __all__ =['GWBSensitivityCurve',
           'DeterSensitivityCurve',
