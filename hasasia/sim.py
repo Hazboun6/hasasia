@@ -2,7 +2,7 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-from . import sensitivity as sens
+from .sensitivity import Pulsar
 
 __all__ = ['create_design_matrix',
            'sim_pta',
@@ -164,8 +164,8 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
                                       freqs=freqs)
             corr += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
         M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
-        p = sens.Pulsar(toas, toaerrs, phi=pars['phi'][ii],
-                        theta=pars['theta'][ii], N=N)
+        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii],
+                   theta=pars['theta'][ii], N=N)
         psrs.append(p)
 
     return psrs
