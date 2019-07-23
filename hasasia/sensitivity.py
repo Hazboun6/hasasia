@@ -6,7 +6,7 @@ import itertools as it
 import scipy.stats as sps
 from astropy import units as u
 
-from . import sim
+from .sim import create_design_matrix
 
 __all__ =['GWBSensitivityCurve',
           'DeterSensitivityCurve',
@@ -281,8 +281,8 @@ class Pulsar(object):
             self.N = N
 
         if designmatrix is None:
-            self.designmatrix = sim.create_design_matrix(toas, RADEC=True,
-                                                         PROPER=True, PX=True)
+            self.designmatrix = create_design_matrix(toas, RADEC=True,
+                                                     PROPER=True, PX=True)
         else:
             self.designmatrix = designmatrix
 
