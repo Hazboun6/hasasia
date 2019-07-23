@@ -5,3 +5,5 @@ numpydoc>=0.8.0
 
 numpy>=1.12
 matplotlib >=3.0
+scipy >= 1.0
+astropy >= 3.0
