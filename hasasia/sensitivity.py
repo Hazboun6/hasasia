@@ -8,15 +8,15 @@ from astropy import units as u
 
 from . import sim
 
-__all__ =['R_matrix',
+__all__ =['GWBSensitivityCurve',
+          'DeterSensitivityCurve',
+          'Pulsar',
+          'Spectrum',
+          'R_matrix',
           'G_matrix',
           'get_Tf',
           'get_inw_Tf',
           'resid_response',
-          'Pulsar',
-          'Spectrum',
-          'GWBSensitivityCurve',
-          'DeterSensitivityCurve',
           'SensitivityCurve',
           'HellingsDownsCoeff',
           'get_Tspan',
@@ -46,8 +46,8 @@ def R_matrix(designmatrix, N):
     N : array
         TOA uncertainties [s]
 
-    Return
-    ------
+    Returns
+    -------
     R matrix
 
     """
@@ -74,8 +74,8 @@ def G_matrix(designmatrix):
     designmatrix : array
         Design matrix for a pulsar timing model.
 
-    Return
-    ------
+    Returns
+    -------
     G matrix
 
     """
@@ -110,13 +110,13 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     fmin : float, optional
         Minimum frequency at which to calculate transmission function.
 
-    fmax: float, optional
+    fmax : float, optional
         Maximum frequency at which to calculate transmission function.
 
-    exact_astro_freqs: bool, optional
+    exact_astro_freqs : bool, optional
         Whether to use exact 1/year and 2/year frequency values in calculation.
 
-    from_G: bool, optional
+    from_G : bool, optional
         Whether to use G matrix for transmission function calculate. Default is
         False, in which case R matrix is used.
     """
@@ -169,8 +169,9 @@ def get_inw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
                return_Gtilde_Ncal=False):
     """
     Calculate the inverse-noise-wieghted transmission function for a given
-    pulsar. This calculates \mathcal{N}^{-1}(f,f') and \mathcal{N}^{-1}(f) in
-    [1], see Equations (19-20).
+    pulsar. This calculates
+    :math:`\mathcal{N}^{-1}(f,f') , \quad \mathcal{N}^{-1}(f)`
+    in [1], see Equations (19-20).
 
     Parameters
     ----------
@@ -184,10 +185,10 @@ def get_inw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     fmin : float, optional
         Minimum frequency at which to calculate transmission function.
 
-    fmax: float, optional
+    fmax : float, optional
         Maximum frequency at which to calculate transmission function.
 
-    exact_yr_freqs: bool, optional
+    exact_yr_freqs : bool, optional
         Whether to use exact 1/year and 2/year frequency values in calculation.
 
     Returns
@@ -462,6 +463,10 @@ class SensitivityCurve(object):
 
 
 class GWBSensitivityCurve(SensitivityCurve):
+    """
+    Class to produce a sensitivity curve for a gravitational wave
+    background, using Hellings-Downs spatial correlations.
+    """
     def __init__(self, spectra):
         super().__init__(spectra)
         HDCoff = HellingsDownsCoeff(self.phis, self.thetas)
@@ -471,6 +476,11 @@ class GWBSensitivityCurve(SensitivityCurve):
                               for ii,jj in zip(self.pairs[0],self.pairs[1])])
 
     def SNR(self, Sh):
+        """
+        Calculate the signal-to-noise ratio of a given signal strain power
+        spectral density, `Sh`. Must match frequency range and `df` of
+        `self`.
+        """
         integrand = Sh**2 / self.S_eff**2
         return np.sqrt(2.0 * self.Tspan * np.trapz(y=integrand,
                                                    x=self.freqs,
@@ -526,7 +536,7 @@ def HellingsDownsCoeff(phi, theta):
     phi : array, list
         Pulsar axial coordinate.
 
-    theta: array, list
+    theta : array, list
         Pulsar azimuthal coordinate.
 
     Returns
@@ -538,7 +548,7 @@ def HellingsDownsCoeff(phi, theta):
     chiIJ : array
         An Npair-long array of Hellings and Downs relation coefficients.
 
-    pairs: array
+    pairs : array
         A 2xNpair array of pair indices corresponding to input order of sky
         coordinates.
 

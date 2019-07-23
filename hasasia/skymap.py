@@ -18,8 +18,7 @@ yr_sec = 365.25*24*3600
 class SkySensitivity(DeterSensitivityCurve):
     '''
     Class to make sky maps for deterministic PTA gravitational wave signals.
-    Calculated in terms of $\hat{n}=-\hat{k}$.
-    Note: $\hat{l}=> -\hat{l}$ and $\hat{m}=>\hat{m}$.
+    Calculated in terms of :math:`\hat{n}=-\hat{k}`.
     '''
     def __init__(self, spectra, theta_gw, phi_gw):
         super().__init__(spectra)

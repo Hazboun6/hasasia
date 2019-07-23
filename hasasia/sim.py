@@ -16,12 +16,24 @@ def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
     Return designmatrix for quadratic spindown model + optional
     astrometric parameters
 
-    :param toas: toa measurements [s]
-    :param RADEC: (optional) Includes RA/DEC fitting
-    :param PROPER: (optional) Includes proper motion fitting
-    :param PX: (optional) Includes parallax fitting
+    Parameters
+    ----------
+    toas : array
+        TOA measurements [s]
 
-    :return: M design matrix for QSD + optional astronometry
+    RADEC : bool, optional
+        Includes RA/DEC fitting.
+
+    PROPER : bool, optional
+        Includes proper motion fitting.
+
+    PX : bool, optional
+        Includes parallax fitting.
+
+    Returns
+    -------
+    M : array
+        Design matrix for quadratic spin down + optional astrometry fit.
 
    """
     model = ['QSD', 'QSD', 'QSD']
@@ -92,8 +104,8 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
         Array of frequencies at which to calculate the red noise. Same
         array used for all pulsars.
 
-    Return
-    ------
+    Returns
+    -------
     psrs : list
         List of `hasasia.Pulsar()` objects.
 
