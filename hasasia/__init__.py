@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""Top-level package for pta_sensitivity."""
+"""Top-level package for hasasia."""
 
 __author__ = """Jeffrey S. Hazboun"""
 __email__ = 'jeffrey.hazboun@gmail.com'
