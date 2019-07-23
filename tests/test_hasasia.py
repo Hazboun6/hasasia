@@ -6,7 +6,9 @@
 import pytest
 
 
-from hasasia import hasasia
+from hasasia import sensitivity
+from hasasia import skymap
+from hasasia import sim
 
 
 @pytest.fixture
