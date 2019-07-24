@@ -8,16 +8,16 @@ from astropy import units as u
 
 from .utils import create_design_matrix
 
-__all__ =['GWBSensitivityCurve',
+__all__ =['SensitivityCurve',
+          'GWBSensitivityCurve',
           'DeterSensitivityCurve',
           'Pulsar',
           'Spectrum',
           'R_matrix',
           'G_matrix',
           'get_Tf',
-          'get_inw_Tf',
+          'get_NcalInv',
           'resid_response',
-          'SensitivityCurve',
           'HellingsDownsCoeff',
           'get_Tspan',
           'get_TspanIJ',
@@ -164,14 +164,16 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 
     return np.real(Tmat), ff, T
 
-def get_inw_Tf(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
+def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
                exact_yr_freqs = False, full_matrix=False,
                return_Gtilde_Ncal=False):
     """
     Calculate the inverse-noise-wieghted transmission function for a given
     pulsar. This calculates
-    :math:`\mathcal{N}^{-1}(f,f') , \quad \mathcal{N}^{-1}(f)`
-    in [1], see Equations (19-20).
+    :math:`\mathcal{N}^{-1}(f,f') , \; \mathcal{N}^{-1}(f)`
+    in `[1]`_, see Equations (19-20).
+
+    .. _[1]: https://arxiv.org/abs/1907.04341
 
     Parameters
     ----------
@@ -287,8 +289,32 @@ class Pulsar(object):
             self.designmatrix = designmatrix
 
 class Spectrum(object):
+    """Class to encode the spectral information about a single pulsar."""
     def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, **Tf_kwargs):
+        """
+        Parameters
+        ----------
+
+        psr : `hasasia.Pulsar`
+            A `hasasia.Pulsar` instance.
+
+        nf : int, optional
+            Number of frequencies over which to build the various spectral
+            densities.
+
+        fmin : float, optional [Hz]
+            Minimum frequency over which to build the various spectral
+            densities. Defaults to the timespan/5 of the pulsar.
+
+        fmax : float, optional [Hz]
+            Minimum frequency over which to build the various spectral
+            densities.
+
+        freqs : array, optional [Hz]
+            Optionally supply an array of frequencies over which to build the
+            various spectral densities.
+        """
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
         self.phi = psr.phi
@@ -310,7 +336,7 @@ class Spectrum(object):
     def psd_postfit(self):
         """Postfit Residual Power Spectral Density"""
         if not hasattr(self, '_psd_postfit'):
-            self._psd_postfit = self.psd_prefit * self.Tf
+            self._psd_postfit = self.psd_prefit * self.NcalInv
         return self._psd_postfit
 
     @property
@@ -327,48 +353,75 @@ class Spectrum(object):
         return self._psd_prefit
 
     @property
-    def Tf_simp(self):
-        if not hasattr(self, '_Tf_simp'):
-            self._Tf_simp,_,_ = get_Tf(designmatrix=self.designmatrix,
-                                  toas=self.toas, N=self.N,
-                                  freqs=self.freqs,from_G=True,**self.Tf_kwargs)
-        return self._Tf_simp
-
-    @property
     def Tf(self):
         if not hasattr(self, '_Tf'):
-            self._Tf = get_inw_Tf(psr=self,freqs=self.freqs)
+            self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
+                                       toas=self.toas, N=self.N,
+                                       freqs=self.freqs, from_G=True,
+                                       **self.Tf_kwargs)
         return self._Tf
 
     @property
-    def Sn(self):
-        """Strain power sensitivity. """
-        if not hasattr(self, '_Sn'):
-            self._Sn = 1/resid_response(self.freqs)/self.Tf
-        return self._Sn
+    def NcalInv(self):
+        """Inverse Noise Weighted Transmission Function."""
+        if not hasattr(self, '_NcalInv'):
+            self._NcalInv = get_NcalInv(psr=self,freqs=self.freqs)
+        return self._NcalInv
+
+    @property
+    def S_I(self):
+        """Strain power sensitivity for this pulsar. Equation (74) in `[1]`_
+
+        .. math::
+            S_I=\\frac{1}{\mathcal{N}^{-1}\;\mathcal{R}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
+        if not hasattr(self, '_S_I'):
+            self._S_I = 1/resid_response(self.freqs)/self.NcalInv
+        return self._S_I
 
     @property
     def S_R(self):
-        """Residual power sensitivity. """
+        """Residual power sensitivity for this pulsar.
+
+        .. math::
+            S_R=\\frac{1}{\mathcal{N}^{-1}}
+
+        """
         if not hasattr(self, '_S_R'):
-            self._S_R = 1/self.Tf
+            self._S_R = 1/self.NcalInv
         return self._S_R
 
     @property
     def h_c(self):
-        """Characteristic strain sensitivity"""
+        """Characteristic strain sensitivity for this pulsar.
+
+        .. math::
+            h_c=\\sqrt{f\;S_I}
+        """
         if not hasattr(self, '_h_c'):
-            self._h_c = np.sqrt(self.freqs * self.Sn)
+            self._h_c = np.sqrt(self.freqs * self.S_I)
         return self._h_c
 
     @property
     def Omega_gw(self):
-        """Energy Density sensitivity"""
-        raise NotImplementedError()
+        """Energy Density sensitivity.
+
+        .. math::
+            \\Omega_{gw}=\\frac{2\\pi^2}{3\;H_0^2}f^3\;S_I
+        """
+        self._Omega_gw = ((2*np.pi**2/3) * self.freqs**3 * self.S_I
+                           / self._H_0.to('Hz').value**2)
+        return self._Omega_gw
 
     def add_white_noise_power(self, sigma=None, dt=None, vals=False):
         """
         Add power law red noise to the prefit residual power spectral density.
+
+        **Note:** All noise information is furnished by the covariance matrix in
+        the `hasasia.Pulsar` object, this is simply useful for bookkeeping and
+        plots.
 
         Parameters
         ----------
@@ -390,7 +443,11 @@ class Spectrum(object):
     def add_red_noise_power(self, A=None, gamma=None, vals=False):
         """
         Add power law red noise to the prefit residual power spectral density.
-        As P=A^2*(f/fyr)^-gamma*df
+        As :math:`P=A^2(f/fyr)^{-\gamma}`.
+
+        **Note:** All noise information is furnished by the covariance matrix in
+        the `hasasia.Pulsar` object, this is simply useful for bookkeeping and
+        plots.
 
         Parameters
         ----------
@@ -405,26 +462,32 @@ class Spectrum(object):
             to `self.psd_prefit`.
         """
         ff = self.freqs
-        # df = np.diff(ff)
-        # df = np.append(df[0],df)
-        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3# * df
+        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
         self._psd_prefit += red_noise
         if vals:
             return red_noise
 
     def add_noise_power(self,noise):
-        """Add any spectrum of noise."""
+        """Add any spectrum of noise. Must match length of frequency array.
+
+        **Note:** All noise information is furnished by the covariance matrix in
+        the `hasasia.Pulsar` object, this is simply useful for bookkeeping and
+        plots.
+        """
         self._psd_prefit += noise
 
 
 class SensitivityCurve(object):
     """
-    Class for constructing PTA sensitivity curves.
+    Base class for constructing PTA sensitivity curves. Takes a list of
+    `hasasia.Spectrum` objects as input.
     """
     def __init__(self, spectra):
+
         if not isinstance(spectra, list):
             raise ValueError('Must provide list of spectra!!')
 
+        self._H_0 = 72 * u.km / u.s / u.Mpc
         self.Npsrs = len(spectra)
         self.phis = np.array([p.phi for p in spectra])
         self.thetas = np.array([p.theta for p in spectra])
@@ -441,7 +504,7 @@ class SensitivityCurve(object):
             raise ValueError('All frequency arrays must match for sensitivity'
                              ' curve calculation!!')
 
-        self.SnI = np.array([sp.Sn for sp in spectra])
+        self.SnI = np.array([sp.S_I for sp in spectra])
 
     @property
     def S_eff(self):
@@ -459,7 +522,15 @@ class SensitivityCurve(object):
     @property
     def Omega_gw(self):
         """Energy Density sensitivity"""
-        raise NotImplementedError()
+        self._Omega_gw = ((2*np.pi**2/3) * self.freqs**3 * self.S_eff
+                           / self._H_0.to('Hz').value**2)
+        return self._Omega_gw
+
+    @property
+    def H_0(self):
+        """Hubble Constant. Must be given in """
+        self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
+        return self._H_0
 
 
 class GWBSensitivityCurve(SensitivityCurve):
@@ -510,6 +581,7 @@ class GWBSensitivityCurve(SensitivityCurve):
                                      / num[:,np.newaxis])
 
         return self._S_effIJ
+
 
 class DeterSensitivityCurve(SensitivityCurve):
     def __init__(self, spectra):
@@ -634,7 +706,9 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     Function to quantize and average TOAs by observation epoch. Used especially
     for NANOGrav multiband data.
 
-    From https://github.com/vallis/libstempo/blob/master/libstempo/toasim.py
+    Pulled from `[3]`_.
+
+    .. _[3]: https://github.com/vallis/libstempo/blob/master/libstempo/toasim.py
 
     Parameters
     ----------
@@ -680,7 +754,7 @@ def SimCurve():
 def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
     """
     Add power law red noise to the prefit residual power spectral density.
-    As P=A^2*(f/fyr)^-gamma*df
+    As :math:`P=A^2(f/fyr)^{-\gamma}`
 
     Parameters
     ----------

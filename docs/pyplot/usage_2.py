@@ -14,12 +14,12 @@ spectra = []
 spectra3 = []
 for p in psrs:
      sp = Spectrum(p, freqs=freqs)
-     sp.Tf
+     sp.NcalInv
      spectra.append(sp)
 
 for p in psrs3:
      sp = Spectrum(p, freqs=freqs)
-     sp.Tf
+     sp.NcalInv
      spectra3.append(sp)
 
 scGWB1=GWBSensitivityCurve(spectra)

@@ -106,17 +106,18 @@ def h0_circ(M_c, D_L, f0):
             * np.power(np.pi * f0 * u.Hz, 2/3))
 
 def khat(theta, phi):
-    '''Returns $\hat{k}$ from paper. Also equal to $-\hat{r}=-\hat{n}$.'''
+    '''Returns :math:`\hat{k}` from paper.
+    Also equal to :math:`-\hat{r}=-\hat{n}`.'''
     return np.array([-np.sin(theta)*np.cos(phi),
                      -np.sin(theta)*np.sin(phi),
                      -np.cos(theta)])
 
 def lhat(theta, phi):
-    '''Returns $\hat{l}$ from paper. Also equal to $-\hat{\phi}$.'''
+    '''Returns :math:`\hat{l}` from paper. Also equal to :math:`-\hat{\phi}`.'''
     return np.array([np.sin(phi), -np.cos(phi), np.zeros_like(theta)])
 
 def mhat(theta, phi):
-    '''Returns $\hat{m}$ from paper. Also equal to $-\hat{\theta}$.'''
+    '''Returns :math:`\hat{m}` from paper. Also equal to :math:`-\hat{\theta}`.'''
     return np.array([-np.cos(theta)*np.cos(phi),
                      -np.cos(theta)*np.sin(phi),
                      np.sin(theta)])

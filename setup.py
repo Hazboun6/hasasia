@@ -33,7 +33,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
-    description="A Python package to calculate gravitational-wave senstivity curves for pulsar timing arrays.",
+    description="A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.",
     install_requires=requirements,
     license="MIT license",
     long_description=readme + '\n\n' + history,

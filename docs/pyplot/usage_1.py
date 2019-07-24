@@ -11,7 +11,7 @@ psrs = sim_pta(timespan=11.4,cad=23,sigma=1e-7,
 spectra = []
 for p in psrs:
      sp = Spectrum(p, freqs=freqs)
-     sp.Tf
+     sp.NcalInv
      spectra.append(sp)
 
 scGWB=GWBSensitivityCurve(spectra)
