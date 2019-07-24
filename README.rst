@@ -13,10 +13,11 @@ hasasia
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
-
-
-
 A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.
+
+hasasia is Arabic for sensitivity_
+
+.. _sensitivity: https://translate.google.com/#view=home&op=translate&sl=auto&tl=ar&text=sensitivity
 
 * Free software: MIT license
 * Documentation: https://hasasia.readthedocs.io.
