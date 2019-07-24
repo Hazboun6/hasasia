@@ -33,8 +33,29 @@ Calculates the following structures needed for signal analysis with pulsars:
 * Power-law integrated sensitivity curves.
 * Sensitivity sky maps for pulsar timing arrays
 
+Publication
+-----------
+This work is featured in a publication_, currently released on the ArXiv. If you
+would like to reference this work please use the following attribution:
+
+.. _publication: https://arxiv.org/pdf/1907.04341.pdf
+
+.. code-block:: tex
+
+@article{Hazboun:2019vhv,
+    author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith,
+                      Tristan L.",
+    title          = "{Realistic sensitivity curves for pulsar timing arrays}",
+    year           = "2019",
+    eprint         = "1907.04341",
+    archivePrefix  = "arXiv",
+    primaryClass   = "gr-qc",
+    SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
+}
+
 Credits
 -------
+Development Team: Jeffrey S. Hazboun, Joseph D. Romano  and Tristan L. Smith
 
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 
