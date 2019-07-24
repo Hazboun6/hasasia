@@ -97,6 +97,37 @@ class SkySensitivity(DeterSensitivityCurve):
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):
+    """
+    Convenience function that returns the Fourier domain representation of a
+    single circular super-massive binary black hole.
+
+    Parameters
+    ----------
+
+    M_c : float [M_sun]
+        Chirp mass of a SMBHB.
+
+    D_L : float [Mpc]
+        Luminosity distance to a SMBHB.
+
+    f0 : float [Hz]
+        Frequency of the SMBHB.
+
+    Tspan : float [sec]
+        Timespan that the binary has been observed. Usually taken as the
+        timespan of the data set.
+
+    f : array [Hz]
+        Array of frequencies over which to model the Fourier domain signal.
+
+    Returns
+    -------
+
+    hcw : array [strain]
+        Array of strain values across the frequency range provided for a
+        circular SMBHB.
+        
+    """
     return h0_circ(M_c, D_L, f0) * Tspan * (np.sinc(Tspan*(f-f0))
                                             + np.sinc(Tspan*(f+f0)))
 

@@ -238,40 +238,44 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
 def resid_response(freqs):
     """
     Returns the timing residual response function for a pulsar across as set of
-    frequencies. See Equation (53) in [1].
+    frequencies. See Equation (53) in `[1]`_.
+
+    .. math::
+        \\mathcal{R}(f)=\\frac{1}{12\pi^2\;f^2}
+
+    .. _[1]: https://arxiv.org/abs/1907.04341
     """
     return 1/(12 * np.pi**2 * freqs**2)
 
 class Pulsar(object):
     """
     Class to encode information about individual pulsars.
+
+    Parameters
+    ----------
+
+    toas : array
+        Pulsar Times of Arrival [sec].
+
+    toaerrs : array
+        Pulsar TOA errors [sec].
+
+    phi : float
+        Ecliptic longitude of pulsar [rad].
+
+    theta : float
+        Ecliptic latitude of pulsar [rad].
+
+    designmatrix : array
+        Design matrix for pulsar's timing model. N_TOA x N_param.
+
+    N : array
+        Covariance matrix for the pulsar. N_TOA x N_TOA. Made from toaerrs
+        if not provided.
+
     """
     def __init__(self, toas, toaerrs, phi=None, theta=None,
                  designmatrix=None, N=None):
-        """
-        Parameters
-        ----------
-
-        toas : array
-            Pulsar Times of Arrival [sec].
-
-        toaerrs : array
-            Pulsar TOA errors [sec].
-
-        phi : float
-            Ecliptic longitude of pulsar [rad].
-
-        theta : float
-            Ecliptic latitude of pulsar [rad].
-
-        designmatrix : array
-            Design matrix for pulsar's timing model. N_TOA x N_param.
-
-        N : array
-            Covariance matrix for the pulsar. N_TOA x N_TOA. Made from toaerrs
-            if not provided.
-
-        """
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
@@ -289,32 +293,32 @@ class Pulsar(object):
             self.designmatrix = designmatrix
 
 class Spectrum(object):
-    """Class to encode the spectral information about a single pulsar."""
+    """Class to encode the spectral information for a single pulsar.
+
+    Parameters
+    ----------
+
+    psr : `hasasia.Pulsar`
+        A `hasasia.Pulsar` instance.
+
+    nf : int, optional
+        Number of frequencies over which to build the various spectral
+        densities.
+
+    fmin : float, optional [Hz]
+        Minimum frequency over which to build the various spectral
+        densities. Defaults to the timespan/5 of the pulsar.
+
+    fmax : float, optional [Hz]
+        Minimum frequency over which to build the various spectral
+        densities.
+
+    freqs : array, optional [Hz]
+        Optionally supply an array of frequencies over which to build the
+        various spectral densities.
+    """
     def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, **Tf_kwargs):
-        """
-        Parameters
-        ----------
-
-        psr : `hasasia.Pulsar`
-            A `hasasia.Pulsar` instance.
-
-        nf : int, optional
-            Number of frequencies over which to build the various spectral
-            densities.
-
-        fmin : float, optional [Hz]
-            Minimum frequency over which to build the various spectral
-            densities. Defaults to the timespan/5 of the pulsar.
-
-        fmax : float, optional [Hz]
-            Minimum frequency over which to build the various spectral
-            densities.
-
-        freqs : array, optional [Hz]
-            Optionally supply an array of frequencies over which to build the
-            various spectral densities.
-        """
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
         self.phi = psr.phi
