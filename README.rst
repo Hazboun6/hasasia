@@ -15,7 +15,7 @@ hasasia
 
 A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.
 
-حساسية (hasasia) is Arabic for sensitivity_ 
+حساسية (hasasia) is Arabic for sensitivity_
 
 .. _sensitivity: https://translate.google.com/#view=home&op=translate&sl=auto&tl=ar&text=sensitivity
 
@@ -33,6 +33,17 @@ Calculates the following structures needed for signal analysis with pulsars:
 * Pulsar timing array sensitivity curves as characteristic strain, strain sensitivity or energy density.
 * Power-law integrated sensitivity curves.
 * Sensitivity sky maps for pulsar timing arrays
+
+Getting Started
+---------------
+
+`hasasia` is on the Python Package Inventory, so the easiest way to get started
+is by use `pip` to install::
+
+  pip install hasasia
+
+
+
 
 Publication
 -----------
