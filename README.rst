@@ -25,11 +25,11 @@ A Python package to calculate gravitational-wave sensitivity curves for pulsar t
 Features
 --------
 Calculates the following structures needed for signal analysis with pulsars:
+
 * Pulsar transmission functions
 * Inverse-noise-weighted transmission functions
 * Individual pulsar sensitivity curves.
-* Pulsar timing array sensitivity curves as characteristic strain,
-  strain sensitivity or energy density.
+* Pulsar timing array sensitivity curves as characteristic strain, strain sensitivity or energy density.
 * Power-law integrated sensitivity curves.
 * Sensitivity sky maps for pulsar timing arrays
 
