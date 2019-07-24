@@ -42,16 +42,15 @@ would like to reference this work please use the following attribution:
 
 .. code-block:: tex
 
-@article{Hazboun:2019vhv,
-    author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith,
-                      Tristan L.",
-    title          = "{Realistic sensitivity curves for pulsar timing arrays}",
-    year           = "2019",
-    eprint         = "1907.04341",
-    archivePrefix  = "arXiv",
-    primaryClass   = "gr-qc",
-    SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
-}
+  @article{Hazboun:2019vhv,
+      author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith, Tristan L.",
+      title          = "{Realistic sensitivity curves for pulsar timing arrays}",
+      year           = "2019",
+      eprint         = "1907.04341",
+      archivePrefix  = "arXiv",
+      primaryClass   = "gr-qc",
+      SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
+      }
 
 Credits
 -------
