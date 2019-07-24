@@ -18,15 +18,20 @@ hasasia
 
 A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.
 
-
 * Free software: MIT license
 * Documentation: https://hasasia.readthedocs.io.
 
 
 Features
 --------
-
-* TODO
+Calculates the following structures needed for signal analysis with pulsars:
+* Pulsar transmission functions
+* Inverse-noise-weighted transmission functions
+* Individual pulsar sensitivity curves.
+* Pulsar timing array sensitivity curves as characteristic strain,
+  strain sensitivity or energy density.
+* Power-law integrated sensitivity curves.
+* Sensitivity sky maps for pulsar timing arrays
 
 Credits
 -------
