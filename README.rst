@@ -38,16 +38,23 @@ Getting Started
 ---------------
 
 `hasasia` is on the Python Package Inventory, so the easiest way to get started
-is by use `pip` to install::
+is by using `pip` to install::
 
   pip install hasasia
 
+.. code-block:: python
 
+  import hasasia.senstivity as hsen
+  toas = np.arange(54378,59765,22)
+  toaerrs = 1e-7*np.ones_like(toas)
+  psr = hsen.Pulsar(toas=toas,toaerrs=toaerrs)
+  spec = hsen.Spectrum(psr)
+  
 
 
 Publication
 -----------
-This work is featured in a publication_, currently released on the ArXiv. If you
+This work is featured in a publication_, currently released on the arXiv. If you
 would like to reference this work please use the following attribution:
 
 .. _publication: https://arxiv.org/pdf/1907.04341.pdf
@@ -55,14 +62,14 @@ would like to reference this work please use the following attribution:
 .. code-block:: tex
 
   @article{Hazboun:2019vhv,
-      author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith, Tristan L.",
-      title          = "{Realistic sensitivity curves for pulsar timing arrays}",
-      year           = "2019",
-      eprint         = "1907.04341",
-      archivePrefix  = "arXiv",
-      primaryClass   = "gr-qc",
-      SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
-      }
+           author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith, Tristan L.",
+           title          = "{Realistic sensitivity curves for pulsar timing arrays}",
+           year           = "2019",
+           eprint         = "1907.04341",
+           archivePrefix  = "arXiv",
+           primaryClass   = "gr-qc",
+           SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
+           }
 
 Credits
 -------
