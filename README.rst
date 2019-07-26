@@ -42,14 +42,17 @@ is by using `pip` to install::
 
   pip install hasasia
 
+The pulsar and spectrum objects are used to build sensitivity curves for full
+PTAs. The Spectrum object has all of the information needed for the pulsar.
+
 .. code-block:: python
 
   import hasasia.senstivity as hsen
-  toas = np.arange(54378,59765,22)
-  toaerrs = 1e-7*np.ones_like(toas)
+
+  toas = np.arange(54378,59765,22) #Choose a range of times-of-arrival
+  toaerrs = 1e-7*np.ones_like(toas) #Set all errors to 100 ns
   psr = hsen.Pulsar(toas=toas,toaerrs=toaerrs)
   spec = hsen.Spectrum(psr)
-  
 
 
 Publication

@@ -117,8 +117,8 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
         Whether to use exact 1/year and 2/year frequency values in calculation.
 
     from_G : bool, optional
-        Whether to use G matrix for transmission function calculate. Default is
-        False, in which case R matrix is used.
+        Whether to use G matrix for transmission function calculate. If False
+        R-matrix is used.
     """
     if not from_G and N is None:
         err_msg = 'Covariance Matrix must be provided if constructing'
@@ -130,7 +130,6 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     ## Prep Correlation
     t1, t2 = np.meshgrid(toas, toas)
     tm = np.abs(t1-t2)
-
 
     # make filter
     T = toas.max()-toas.min()

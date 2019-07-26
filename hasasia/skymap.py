@@ -39,9 +39,9 @@ class SkySensitivity(DeterSensitivityCurve):
         num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
         denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
         self.D = num[:,:,:,np.newaxis]/denom[np.newaxis, np.newaxis,:,:]
-        self.Fplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
-        self.Fcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
-        self.sky_response = self.Fplus**2 + self.Fcross**2
+        self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
+        self.Rcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
+        self.sky_response = self.Rplus**2 + self.Rcross**2
 
     def SNR(self, h):
         integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
@@ -57,7 +57,10 @@ class SkySensitivity(DeterSensitivityCurve):
         h_div_A : array
             An array that represents the frequency dependence of a signal
             that has been divided by the amplitude. Must cover the same
-            frequencies covered by the Skymap.freqs .
+            frequencies covered by the `Skymap.freqs`.
+
+        SNR : float, optional
+            Desired signal-to-noise ratio.
 
         Returns
         -------
@@ -126,12 +129,13 @@ def h_circ(M_c, D_L, f0, Tspan, f):
     hcw : array [strain]
         Array of strain values across the frequency range provided for a
         circular SMBHB.
-        
+
     """
     return h0_circ(M_c, D_L, f0) * Tspan * (np.sinc(Tspan*(f-f0))
                                             + np.sinc(Tspan*(f+f0)))
 
 def h0_circ(M_c, D_L, f0):
+    """Amplitude of a circular super-massive binary black hole."""
     return (4*c.c / (D_L * u.Mpc)
             * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
             * np.power(np.pi * f0 * u.Hz, 2/3))
