@@ -1,6 +1,6 @@
-=======
-Modules
-=======
+===================================
+Detailed User Interface Information
+===================================
 
 Sensitivity
 -----------

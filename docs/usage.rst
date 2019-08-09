@@ -1,23 +1,28 @@
-=====
-Usage
-=====
+===============
+Getting Started
+===============
 
-To use hasasia in a project::
+To use hasasia, first import these useful modules::
 
     import hasasia.sensitivity as sens
     import hasasia.sim as sim
 
+The simplest way to get started is by making a set of simulated pulsars, all
+with the same parameters, except the sky positions::
+
     phi = np.random.uniform(0, 2*np.pi,size=34)
     theta = np.random.uniform(0, np.pi,size=34)
-    freqs = np.logspace(np.log10(5e-10),np.log10(5e-7),400)
 
-    #Make a set of psrs with the same parameters
-    psrs = sim.sim_pta(timespan=11.4,cad=23,sigma=1e-7,
+    psrs = sim.sim_pta(timespan=11.4, cad=23, sigma=1e-7,
                        phi=phi, theta=theta, Npsrs=34)
 
-Next make a spectra object for each pulsar. Here we calculate the
-inverse-noise-weighted transmission function along the way.::
+The `sim.sim_pta` method can take single values or a list/array of timespans
+[yrs], cadences [1/yr], TOA errors [sec] and sky locations [rad].
 
+Next make a spectra object for each pulsar. Here we calculate the
+inverse-noise-weighted transmission function along the way::
+
+    freqs = np.logspace(np.log10(5e-10),np.log10(5e-7),400)
     spectra = []
     for p in psrs:
          sp = sens.Spectrum(p, freqs=freqs)
@@ -36,7 +41,7 @@ classes.::
 
 Compare this to a set of sensitivity curves made with 3-year pulsar baselines::
 
-    psrs2 = sim.sim_pta(timespan=11.4,cad=23,sigma=1e-7,
+    psrs2 = sim.sim_pta(timespan=3.0, cad=23, sigma=1e-7,
                         phi=phi, theta=theta, Npsrs=34)
 
     spectra2 = [sens.Spectrum(p, freqs=freqs) for p in psrs2]

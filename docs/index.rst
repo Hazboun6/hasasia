@@ -8,6 +8,7 @@ Welcome to hasasia's documentation!
    readme
    installation
    usage
+   skymap_tutorial
    modules
    contributing
    authors
