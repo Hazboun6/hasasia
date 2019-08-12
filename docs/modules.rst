@@ -9,6 +9,7 @@ needed methods for building a senstivity curve.
 
 .. automodule:: hasasia.sensitivity
     :members:
+    :inherited-members:
 
 Skymap
 ------
@@ -17,13 +18,16 @@ sensitivity maps for pulsar timing array.
 
 .. automodule:: hasasia.skymap
     :members:
+    :inherited-members:
 
 Utils
 -----
 .. automodule:: hasasia.utils
     :members:
+    :inherited-members:
 
 Simulations
 -----------
 .. automodule:: hasasia.sim
     :members:
+    :inherited-members:
