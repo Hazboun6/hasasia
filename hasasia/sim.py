@@ -2,7 +2,7 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-from .sensitivity import Pulsar
+from .sensitivity import Pulsar, red_noise_powerlaw, corr_from_psd
 from .utils import create_design_matrix
 __all__ = ['sim_pta',
            ]
@@ -59,10 +59,10 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
         pars = [timespan, cad, sigma, phi, theta]
         keys = ['timespan', 'cad', 'sigma', 'phi', 'theta']
         stop = 3
-    elif None in [A_rn,alpha,freqs]:
-        err_msg = 'A_rn, alpha and freqs must all be specified for '
-        err_msg += 'in order to build C_rn.'
-        raise ValueError(err_msg)
+    # elif None in [A_rn, alpha, freqs]:
+    #     err_msg = 'A_rn, alpha and freqs must all be specified '
+    #     err_msg += 'in order to build C_rn.'
+    #     raise ValueError(err_msg)
     else:
         pars = [timespan, cad, sigma, A_rn, alpha, phi, theta]
         keys = ['timespan', 'cad', 'sigma', 'A_rn', 'alpha',
@@ -101,12 +101,12 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
         else:
             toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
 
-        N=np.diag(toaerrs**2)
+        N = np.diag(toaerrs**2)
         if 'A_rn' in keys:
-            plaw = red_noise_powerlaw(A=pars['A_rn'],
-                                      alpha=pars['alpha'],
+            plaw = red_noise_powerlaw(A=pars['A_rn'][ii],
+                                      alpha=pars['alpha'][ii],
                                       freqs=freqs)
-            corr += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
         M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
         p = Pulsar(toas, toaerrs, phi=pars['phi'][ii],
                    theta=pars['theta'][ii], N=N)
