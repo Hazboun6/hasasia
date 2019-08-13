@@ -35,6 +35,7 @@ to straight forward sensitivity curves see prior tutorials.
 
     import matplotlib as mpl
     mpl.rcParams['figure.dpi'] = 300
+    mpl.rcParams['figure.figsize'] = [5,3]
     mpl.rcParams['text.usetex'] = True
 
 .. code:: python
@@ -82,6 +83,9 @@ inverse-noise-weighted transmission function for the pulsar along the
 way. For realistic pulsars with +100k TOAs this step will take the most
 time.
 
+Define a SkySensitivity Object
+------------------------------
+
 Before defining a ``hasasia.skymap.SkySensitivity`` object we will need
 to choose a set of sky locations. Here we use the ``healpy`` Python
 package to give us a healpix pixelation of the sky.
@@ -111,7 +115,7 @@ available.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_14_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_15_0.png
 
 
 One can also access the residual response functions for each of the
@@ -127,7 +131,7 @@ individual pulsars, as ``SkySensitivity.Rplus`` and
                             marker='*',color='white',
                             edgecolors='k',s=200)
     hp.mollview(SM.Rcross[idx], fig=2,
-                title="Single Pulsar Response $R^x$",min=-1,max=1)
+                title=r"Single Pulsar Response $R^\times$",min=-1,max=1)
     hp.visufunc.projscatter(SM.thetas[idx],SM.phis[idx],
                             marker='*',color='white',
                             edgecolors='k',s=200)
@@ -136,11 +140,11 @@ individual pulsars, as ``SkySensitivity.Rplus`` and
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_16_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_17_0.png
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_16_1.png
+.. image:: skymap_tutorial_files/skymap_tutorial_17_1.png
 
 
 And the full residual response as ``SkySensitivity.sky_response``.
@@ -156,7 +160,7 @@ And the full residual response as ``SkySensitivity.sky_response``.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_18_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_19_0.png
 
 
 The full frequency and sky location sensitivity information is available
@@ -168,7 +172,7 @@ particular sky position.
 .. code:: python
 
     sky_loc = 'PTA Sensitivity at '
-    sky_loc += '{0:2.1f}$^o$N, {1:2.1f}$^o$E'.format(np.rad2deg(theta_gw[252]),
+    sky_loc += '{0:2.1f}$^\circ$N, {1:2.1f}$^\circ$E'.format(np.rad2deg(theta_gw[252]),
                                                    np.rad2deg(phi_gw[252]))
     plt.loglog(SM.freqs,spectra[0].S_I, label='Individual PSR Sensitivity')
     plt.loglog(SM.freqs,SM.S_effSky[:,252],
@@ -178,7 +182,7 @@ particular sky position.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_20_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_21_0.png
 
 
 Here we plot the ``SkySensitivity.S_effSky`` across the sky at a given
@@ -197,8 +201,11 @@ frequency.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_22_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_23_0.png
 
+
+Calculating SNR across the Sky
+------------------------------
 
 The ``SkySensitivity.S_effSky`` class comes with a method for
 calculating the signal-to-noise ratio for a given signal. Rather than
@@ -206,7 +213,7 @@ calculate a signal from a single sky position, the method will calculate
 the SNR from every sky position initially provided, given a particular
 signal provided in strain across the frequency band.
 
-There is a convenience funcgion for circular binaries provided as
+There is a convenience function for circular binaries provided as
 ``hasasia.skymap.h_circ``.
 
 .. code:: python
@@ -225,7 +232,7 @@ integration time provided as the time span of the data set.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_26_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_28_0.png
 
 
 .. code:: python
@@ -244,7 +251,7 @@ integration time provided as the time span of the data set.
 
 
 
-.. image:: skymap_tutorial_files/skymap_tutorial_28_0.png
+.. image:: skymap_tutorial_files/skymap_tutorial_30_0.png
 
 
 .. code:: python
@@ -264,3 +271,8 @@ integration time provided as the time span of the data set.
     hp.visufunc.projscatter(SM.thetas,SM.phis,marker='*',
                             color='white',edgecolors='k',s=200)
     plt.show()
+
+
+
+.. image:: skymap_tutorial_files/skymap_tutorial_33_0.png
+

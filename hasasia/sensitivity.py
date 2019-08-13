@@ -8,8 +8,7 @@ from astropy import units as u
 
 from .utils import create_design_matrix
 
-__all__ =['SensitivityCurve',
-          'GWBSensitivityCurve',
+__all__ =['GWBSensitivityCurve',
           'DeterSensitivityCurve',
           'Pulsar',
           'Spectrum',
