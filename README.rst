@@ -15,7 +15,7 @@
 
 A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.
 
-.. image:: https://github.com/Hazboun6/hasasia/blob/master/hasasia_calligraphy.jpg
+.. image:: https://raw.githubusercontent.com/Hazboun6/hasasia/master/hasasia_calligraphy.jpg
         :align: center
 
 حساسية (hasasia) is Arabic for sensitivity_
