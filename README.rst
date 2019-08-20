@@ -18,7 +18,7 @@ A Python package to calculate gravitational-wave sensitivity curves for pulsar t
 .. image:: https://raw.githubusercontent.com/Hazboun6/hasasia/master/hasasia_calligraphy.jpg
         :align: center
 
-حساسية (hasasia) is Arabic for sensitivity_
+حساسية (hasasia) is Arabic for sensitivity_ . Image Credit: Reem Tasyakan
 
 .. _sensitivity: https://translate.google.com/#view=home&op=translate&sl=auto&tl=ar&text=sensitivity
 
