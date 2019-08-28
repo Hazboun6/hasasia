@@ -850,7 +850,7 @@ def make_quant(param, default_unit):
         except u.UnitConversionError:
             raise ValueError("Quantity {0} with incompatible unit {1}"
                              .format(param, default_unit))
-        quantity = param
+        quantity = param.to(default_unit)
     else:
         quantity = param * default_unit
 
