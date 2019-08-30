@@ -640,7 +640,7 @@ def HellingsDownsCoeff(phi, theta):
                     + np.sin(theta[first]) * np.sin(theta[second]) \
                     * np.cos(phi[first] - phi[second])
     X = (1. - cosThetaIJ) / 2.
-    chiIJ = [1.5*x*np.log(x) - 0.25*x/4. + 0.5 if x!=0 else 1. for x in X]
+    chiIJ = [1.5*x*np.log(x) - 0.25*x + 0.5 if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
