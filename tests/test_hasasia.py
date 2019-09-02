@@ -6,9 +6,9 @@
 import pytest
 import numpy as np
 
-from hasasia import sensitivity as sens
-from hasasia import skymap
-from hasasia.sim import sim_pta
+import hasasia.sensitivity as hsen
+import hasasia.sim as hsim
+import hasasia.skymap as hsky
 
 phi = np.random.uniform(0, 2*np.pi,size=34)
 theta = np.random.uniform(0, np.pi,size=34)
@@ -24,25 +24,25 @@ def pta_simple():
     """
     Sample set of pulsars for testing. All Tspan=11.4 yrs
     """
-    return sim_pta(timespan=11.4, cad=23, sigma=1e-7,
-                   phi=phi, theta=theta, Npsrs=34)
+    return hsim.sim_pta(timespan=11.4, cad=23, sigma=1e-7,
+                        phi=phi, theta=theta, Npsrs=34)
 
 @pytest.fixture
 def pta_heter():
     """
     Sample set of pulsars for testing.
     """
-    return sim_pta(timespan=timespans,cad=23,sigma=1e-7,
-                   phi=phi,theta=theta)
+    return hsim.sim_pta(timespan=timespans,cad=23,sigma=1e-7,
+                        phi=phi,theta=theta)
 
 def test_simple_pta(pta_simple):
     """Sensitivity Tests"""
     spectra = []
     for p in pta_simple:
-        sp = sens.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs)
         sp.Tf
         spectra.append(sp)
 
-    sens.GWBSensitivityCurve(spectra)
-    sens.DeterSensitivityCurve(spectra)
-    skymap.SkySensitivity(spectra,theta_gw,phi_gw)
+    hsen.GWBSensitivityCurve(spectra)
+    hsen.DeterSensitivityCurve(spectra)
+    hsky.SkySensitivity(spectra,theta_gw,phi_gw)
