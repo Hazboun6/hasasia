@@ -1,5 +1,5 @@
 ---
-title: 'Gala: A Python package for galactic dynamics'
+title: 'Hasasia: A Python package for Pulsar Timing Array Sensitivity Curves'
 tags:
   - Python
   - astronomy
