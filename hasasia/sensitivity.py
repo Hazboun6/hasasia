@@ -4,6 +4,7 @@ from __future__ import print_function
 import numpy as np
 import itertools as it
 import scipy.stats as sps
+import pickle
 from astropy import units as u
 
 from .utils import create_design_matrix
@@ -507,6 +508,11 @@ class SensitivityCurve(object):
                              ' curve calculation!!')
 
         self.SnI = np.array([sp.S_I for sp in spectra])
+
+    def to_pickle(self, filepath):
+        self.filepath = filepath
+        with open(filepath, "wb") as fout:
+            pickle.dump(self, fout)
 
     @property
     def S_eff(self):
