@@ -43,7 +43,6 @@ setup(
     packages=find_packages(include=['hasasia']),
     package_data={'hasasia.sensitivity_curves':
                   ['nanograv_11yr_deter.sc',
-                   'nanograv_11yr_skymap.sc',
                    'nanograv_11yr_stoch.sc']},
     setup_requires=setup_requirements,
     test_suite='tests',
