@@ -10,6 +10,7 @@ authors:
     orcid: 0000-0003-2742-3321
     affiliation: 1
   - name: Joseph D. Romano
+    orcid: 0000-0003-4915-3246
     affiliation: 2
   - name: Tristan L. Smith
     orcid: 0000-0003-2685-5405
