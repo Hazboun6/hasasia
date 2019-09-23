@@ -46,3 +46,11 @@ def test_simple_pta(pta_simple):
     hsen.GWBSensitivityCurve(spectra)
     hsen.DeterSensitivityCurve(spectra)
     hsky.SkySensitivity(spectra,theta_gw,phi_gw)
+
+def test_ng_deter():
+    ngdet = hsen.nanograv_11yr_deter()
+    assert hasattr(ngdet, 'S_eff')
+
+def test_ng_stoch():
+    ngstoch= hsen.nanograv_11yr_stoch()
+    assert hasattr(ngstoch, 'S_eff')
