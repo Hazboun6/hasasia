@@ -30,6 +30,8 @@ __all__ =['GWBSensitivityCurve',
           'red_noise_powerlaw',
           'Agwb_from_Seff_plaw',
           'PI_hc',
+          'nanograv_11yr_stoch',
+          'nanograv_11yr_deter',
           ]
 
 ## Some constants
