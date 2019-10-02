@@ -324,6 +324,7 @@ class Spectrum(object):
     """
     def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, **Tf_kwargs):
+        self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
         self.phi = psr.phi

@@ -59,10 +59,6 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
         pars = [timespan, cad, sigma, phi, theta]
         keys = ['timespan', 'cad', 'sigma', 'phi', 'theta']
         stop = 3
-    # elif None in [A_rn, alpha, freqs]:
-    #     err_msg = 'A_rn, alpha and freqs must all be specified '
-    #     err_msg += 'in order to build C_rn.'
-    #     raise ValueError(err_msg)
     else:
         pars = [timespan, cad, sigma, A_rn, alpha, phi, theta]
         keys = ['timespan', 'cad', 'sigma', 'A_rn', 'alpha',
@@ -113,6 +109,3 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
         psrs.append(p)
 
     return psrs
-
-def sim_SensitivityCurve():
-    raise NotImplementedError()
