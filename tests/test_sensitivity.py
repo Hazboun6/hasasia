@@ -25,6 +25,14 @@ def sc_simple():
     '''Test and keep a simple sensitivity curve'''
     psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
                         phi=phi,theta=theta)
+
+    psr= psrs[0]
+    hsen.R_matrix(psr.designmatrix,psr.N)
+    hsen.G_matrix(psr.designmatrix)
+    hsen.quantize_fast(psr.toas,psr.toaerrs)
+    hsen.get_Tf(psr.designmatrix, psr.toas,psr.N,
+                from_G=True, exact_astro_freqs=True)
+
     spectra = []
     for p in psrs:
         sp = hsen.Spectrum(p, freqs=freqs)
@@ -55,10 +63,32 @@ def test_sensitivity_w_rednoise():
         _ = sp.NcalInv
         spectra3.append(sp)
 
+    spec = spectra3[0]
+    spec.Tf
+    spec.S_I
+    spec.S_R
+    spec.h_c
+    spec.Omega_gw
+    sigma = spec.toaerrs.mean()
+    dt = hsen.get_dt(spec.toas).to('s').value
+    spec.add_white_noise_power(sigma,dt)
+    spec.add_red_noise_power(A=6.8e-16,gamma=13/3.)
+    spec.psd_prefit
+    spec.psd_postfit
+    spec.add_noise_power(spec.psd_prefit)
+    hsen.corr_from_psd(freqs, spec.psd_prefit, spec.toas)
+
     sc2a = hsen.GWBSensitivityCurve(spectra2)
     sc2b = hsen.DeterSensitivityCurve(spectra2)
     sc3a = hsen.GWBSensitivityCurve(spectra3)
     sc3b = hsen.DeterSensitivityCurve(spectra3)
+
+    sc3a.h_c
+    sc3a.Omega_gw
+    sc3a.S_effIJ
+    sc3b.h_c
+    sc3b.Omega_gw
+
 
 def test_PI_sensitivity(sc_simple):
     # Power Law-Integrated Sensitivity Curves
