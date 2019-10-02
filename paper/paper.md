@@ -36,16 +36,21 @@ characterized by a sensitivity curve, a plot in the frequency domain, which
 summarizes their ability to *detect* a given signal. Pulsar timing arrays
 (PTAs) are collections of highly precise millisecond pulsars regularly
 monitored for shifts in the spin period of pulsars indicative of gravitational
-waves in the nanoHertz regime. The sensitivity curves for PTAs are often overly
-simplified in the literature, lacking detailed information about the fit to a
-pulsar's timing parameters and assuming identical pulsar noise characteristics.
+waves in the nanohertz regime. See @hobbs and @burke-spolaor for a review of
+pulsar timing arrays and the astrophysics of nanohertz gravitational waves. The
+sensitivity curves for PTAs are often overly simplified in the literature,
+lacking detailed information about the fit to a pulsar's timing parameters and
+assuming identical pulsar noise characteristics.
 
 ``Hasasia`` is a Python package for calculating and building accurate PTA
 sensitivity curves, largely based on the formalism presented in [@hazboun:2019].
+This software is designed for use by astronomers interested in sources of
+nanohertz gravitational waves and PTA data analysts alike.
 It uses standard Python packages, such as ``Numpy`` [@numpy] and ``Astropy``
 [@astropy] to build sensitivity curves from generic PTAs of individually
 constructed pulsars. ``Hasasia`` includes the ability to add time-correlated
-(red) noise into the noise power spectral density of individual pulsars. The strongest expected signal in the PTA band is the stochastic gravitational
+(red) noise into the noise power spectral density of individual pulsars. The
+strongest expected signal in the PTA band is the stochastic gravitational
 wave background from supermassive binary black holes, which is also modeled as a red noise process. Therefore, it is important to take low-frequency noise into account when assessing the sensitivity of a PTA.
 
 The API is designed with a general astrophysics audience in mind. In fact a number of "standard" PTA configurations are included as part of the package. It has already been made a requirement of another Python package [@gwent]. The various sensitivity curve objects in ``hasasia`` allow the
