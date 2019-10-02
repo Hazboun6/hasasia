@@ -15,6 +15,7 @@ Welcome to hasasia's documentation!
    real_data_tutorial
    modules
    contributing
+   code_of_conduct
    authors
    history
 
