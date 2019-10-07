@@ -172,7 +172,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
                exact_yr_freqs = False, full_matrix=False,
                return_Gtilde_Ncal=False):
-    """
+    r"""
     Calculate the inverse-noise-wieghted transmission function for a given
     pulsar. This calculates
     :math:`\mathcal{N}^{-1}(f,f') , \; \mathcal{N}^{-1}(f)`
@@ -241,7 +241,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(np.diag(TfN)) / get_Tspan([psr])
 
 def resid_response(freqs):
-    """
+    r"""
     Returns the timing residual response function for a pulsar across as set of
     frequencies. See Equation (53) in `[1]`_.
 
@@ -380,7 +380,7 @@ class Spectrum(object):
 
     @property
     def S_I(self):
-        """Strain power sensitivity for this pulsar. Equation (74) in `[1]`_
+        r"""Strain power sensitivity for this pulsar. Equation (74) in `[1]`_
 
         .. math::
             S_I=\\frac{1}{\mathcal{N}^{-1}\;\mathcal{R}}
@@ -393,7 +393,7 @@ class Spectrum(object):
 
     @property
     def S_R(self):
-        """Residual power sensitivity for this pulsar.
+        r"""Residual power sensitivity for this pulsar.
 
         .. math::
             S_R=\\frac{1}{\mathcal{N}^{-1}}
@@ -405,7 +405,7 @@ class Spectrum(object):
 
     @property
     def h_c(self):
-        """Characteristic strain sensitivity for this pulsar.
+        r"""Characteristic strain sensitivity for this pulsar.
 
         .. math::
             h_c=\\sqrt{f\;S_I}
@@ -416,7 +416,7 @@ class Spectrum(object):
 
     @property
     def Omega_gw(self):
-        """Energy Density sensitivity.
+        r"""Energy Density sensitivity.
 
         .. math::
             \\Omega_{gw}=\\frac{2\\pi^2}{3\;H_0^2}f^3\;S_I
@@ -426,7 +426,7 @@ class Spectrum(object):
         return self._Omega_gw
 
     def add_white_noise_power(self, sigma=None, dt=None, vals=False):
-        """
+        r"""
         Add power law red noise to the prefit residual power spectral density.
 
         **Note:** All noise information is furnished by the covariance matrix in
@@ -451,7 +451,7 @@ class Spectrum(object):
             return white_noise
 
     def add_red_noise_power(self, A=None, gamma=None, vals=False):
-        """
+        r"""
         Add power law red noise to the prefit residual power spectral density.
         As :math:`P=A^2(f/fyr)^{-\gamma}`.
 
@@ -478,7 +478,7 @@ class Spectrum(object):
             return red_noise
 
     def add_noise_power(self,noise):
-        """Add any spectrum of noise. Must match length of frequency array.
+        r"""Add any spectrum of noise. Must match length of frequency array.
 
         **Note:** All noise information is furnished by the covariance matrix in
         the `hasasia.Pulsar` object, this is simply useful for bookkeeping and
@@ -488,7 +488,7 @@ class Spectrum(object):
 
 
 class SensitivityCurve(object):
-    """
+    r"""
     Base class for constructing PTA sensitivity curves. Takes a list of
     `hasasia.Spectrum` objects as input.
     """
@@ -549,7 +549,7 @@ class SensitivityCurve(object):
 
 
 class GWBSensitivityCurve(SensitivityCurve):
-    """
+    r"""
     Class to produce a sensitivity curve for a gravitational wave
     background, using Hellings-Downs spatial correlations.
     """
@@ -717,7 +717,7 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
-    """
+    r"""
     Function to quantize and average TOAs by observation epoch. Used especially
     for NANOGrav multiband data.
 
@@ -767,7 +767,7 @@ def SimCurve():
     raise NotImplementedError()
 
 def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
-    """
+    r"""
     Add power law red noise to the prefit residual power spectral density.
     As :math:`P=A^2(f/fyr)^{-\gamma}`
 
@@ -791,7 +791,7 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
 
 def S_h(A, alpha, freqs):
-    """
+    r"""
     Add power law red noise to the prefit residual power spectral density.
     As S_h=A^2*(f/fyr)^(2*alpha)/f
 
@@ -810,7 +810,7 @@ def S_h(A, alpha, freqs):
     return A**2*(freqs/fyr)**(2*alpha) / freqs
 
 def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
-    """
+    r"""
     Must supply numpy.ndarrays.
     """
     if alpha is None:
