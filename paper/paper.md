@@ -53,7 +53,7 @@ constructed pulsars. ``Hasasia`` includes the ability to add time-correlated
 strongest expected signal in the PTA band is the stochastic gravitational
 wave background from supermassive binary black holes, which is also modeled as a red noise process. Therefore, it is important to take low-frequency noise into account when assessing the sensitivity of a PTA.
 
-The API is designed with a general astrophysics audience in mind. In fact a number of "standard" PTA configurations are included as part of the package. It has already been made a requirement of another Python package [@gwent]. The various sensitivity curve objects in ``hasasia`` allow the
+The API is designed with a general astrophysics audience in mind. A number of "standard" PTA configurations are included as part of the package, including the NANOGrav 11-year data, with more coming soon. It has already been made a requirement of another Python package [@gwent]. The various sensitivity curve objects in ``hasasia`` allow the
 calculation of signal-to-noise ratios for a generic user-defined
 gravitational-wave signal. Though the user interface is designed with the
 non-expert in mind, a PTA data analyst can use real pulsar timing data to assess
