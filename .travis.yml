@@ -18,12 +18,13 @@ deploy:
       bWxycmJqeXdOdkVCYWhNYmI4WGErdjdrV1JEeDZEUUVOYzVWdFA0UUwzNXRUcE1VUEkwN3N1TU14
       VXhkYVh4aFZvRHZNbWttT2ZScTV0SE5Bd0p5Q0VvS2FXRS9tY29lay9DM2hWckRnNlRnQTV3Z2M9
   true:
-    python: 3.6
+    python: 3.7
     repo: Hazboun6/hasasia
     tags: true
 install: pip install -U tox-travis
 language: python
 python:
+- 3.7
 - 3.6
 - 3.5
 - 3.4

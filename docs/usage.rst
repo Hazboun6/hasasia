@@ -4,6 +4,7 @@ Getting Started
 
 To use hasasia, first import these useful modules::
 
+    import numpy as np
     import hasasia.sensitivity as sens
     import hasasia.sim as sim
 

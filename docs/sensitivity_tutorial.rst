@@ -83,7 +83,7 @@ realizations.
 
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)        
+        sp = hsen.Spectrum(p, freqs=freqs)
         sp.NcalInv
         spectra.append(sp)
 
@@ -91,12 +91,12 @@ realizations.
 
     spectra2 = []
     for p in psrs2:
-        sp = hsen.Spectrum(p, freqs=freqs)        
+        sp = hsen.Spectrum(p, freqs=freqs)
         sp.NcalInv
         spectra2.append(sp)
 
 Each spectra contains a number of attributes for that particular pulsar,
-inclusing the inverse-noise-weighted transmission function, and
+including the inverse-noise-weighted transmission function, and
 sensitivity curve.
 
 .. code:: python
@@ -205,17 +205,17 @@ One can give each pulsar its own value for the red noise power spectrum.
 
     A_rn = np.random.uniform(1e-16,1e-12,size=phi.shape[0])
     alphas = np.random.uniform(-3/4,1,size=phi.shape[0])
-    
+
     psrs3 = hsim.sim_pta(timespan=timespan,cad=23,sigma=1e-7,
                          phi=phi,theta=theta,
                          A_rn=A_rn,alpha=alphas,freqs=freqs)
-    
+
     spectra3 = []
     for p in psrs3:
-        sp = hsen.Spectrum(p, freqs=freqs)        
+        sp = hsen.Spectrum(p, freqs=freqs)
         sp.NcalInv
         spectra3.append(sp)
-    
+
     sc3a=hsen.GWBSensitivityCurve(spectra3)
     sc3b=hsen.DeterSensitivityCurve(spectra3)
 
@@ -248,7 +248,7 @@ index, which is the default value of the spectral index.
 
     hgw = hsen.Agwb_from_Seff_plaw(sc1a.freqs, Tspan=sc1a.Tspan, SNR=3,
                                    S_eff=sc1a.S_eff)
-    
+
     #We calculate the power law across the frequency range for plotting.
     fyr = 1/(365.25*24*3600)
     plaw_h = hgw*(sc1a.freqs/fyr)**(-2/3)
@@ -270,7 +270,7 @@ process.
         plt.loglog(sc1a.freqs,plaw[:,ii],
                    color='gray',lw=0.5)
     plt.loglog(sc1a.freqs,plaw_h,color='C1',lw=2,
-               label=r'SNR=3, $\alpha=-2/3$')  
+               label=r'SNR=3, $\alpha=-2/3$')
     plt.loglog(sc1a.freqs,sc1a.h_c, label='Stochastic Sensitivity')
     plt.loglog(sc1a.freqs,PI_sc, linestyle=':',color='k',lw=2,
                label='PI Stochastic Sensitivity')
@@ -315,4 +315,3 @@ using the ``GWBSensitivity.pairs`` attribute.
 
 
 .. image:: sensitivity_tutorial_files/sensitivity_tutorial_34_0.png
-
