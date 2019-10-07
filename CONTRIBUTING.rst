@@ -42,6 +42,12 @@ hasasia could always use more documentation, whether as part of the
 official hasasia docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
+Once you change or add documentation within the `docs/` directory you can run
+`make html` to use `sphinx` to convert the `.rst` files into html. You can then
+open the documentation by pointing a web browser to
+`~/hasasia/docs/_build/html/index.html`. The packages needed to compile the
+documentation can be found in the `requirements_docs.txt` file. 
+
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
