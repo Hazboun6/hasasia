@@ -16,7 +16,7 @@ yr_sec = 365.25*24*3600
 
 
 class SkySensitivity(DeterSensitivityCurve):
-    '''
+    r'''
     Class to make sky maps for deterministic PTA gravitational wave signals.
     Calculated in terms of :math:`\hat{n}=-\hat{k}`.
     '''
@@ -100,7 +100,7 @@ class SkySensitivity(DeterSensitivityCurve):
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):
-    """
+    r"""
     Convenience function that returns the Fourier domain representation of a
     single circular super-massive binary black hole.
 
@@ -141,18 +141,18 @@ def h0_circ(M_c, D_L, f0):
             * np.power(np.pi * f0 * u.Hz, 2/3))
 
 def khat(theta, phi):
-    '''Returns :math:`\hat{k}` from paper.
+    r'''Returns :math:`\hat{k}` from paper.
     Also equal to :math:`-\hat{r}=-\hat{n}`.'''
     return np.array([-np.sin(theta)*np.cos(phi),
                      -np.sin(theta)*np.sin(phi),
                      -np.cos(theta)])
 
 def lhat(theta, phi):
-    '''Returns :math:`\hat{l}` from paper. Also equal to :math:`-\hat{\phi}`.'''
+    r'''Returns :math:`\hat{l}` from paper. Also equal to :math:`-\hat{\phi}`.'''
     return np.array([np.sin(phi), -np.cos(phi), np.zeros_like(theta)])
 
 def mhat(theta, phi):
-    '''Returns :math:`\hat{m}` from paper. Also equal to :math:`-\hat{\theta}`.'''
+    r'''Returns :math:`\hat{m}` from paper. Also equal to :math:`-\hat{\theta}`.'''
     return np.array([-np.cos(theta)*np.cos(phi),
                      -np.cos(theta)*np.sin(phi),
                      np.sin(theta)])
