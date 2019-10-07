@@ -543,7 +543,8 @@ class SensitivityCurve(object):
 
     @property
     def H_0(self):
-        """Hubble Constant. Must be given in """
+        """Hubble Constant. Assumed to be in units of km /(s Mpc) unless
+        supplied as an `astropy.quantity`. """
         self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
         return self._H_0
 
