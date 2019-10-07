@@ -246,7 +246,7 @@ def resid_response(freqs):
     frequencies. See Equation (53) in `[1]`_.
 
     .. math::
-        \\mathcal{R}(f)=\\frac{1}{12\pi^2\;f^2}
+        \mathcal{R}(f)=\frac{1}{12\pi^2\;f^2}
 
     .. _[1]: https://arxiv.org/abs/1907.04341
     """
@@ -383,7 +383,7 @@ class Spectrum(object):
         r"""Strain power sensitivity for this pulsar. Equation (74) in `[1]`_
 
         .. math::
-            S_I=\\frac{1}{\mathcal{N}^{-1}\;\mathcal{R}}
+            S_I=\frac{1}{\mathcal{N}^{-1}\;\mathcal{R}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         """
@@ -396,7 +396,7 @@ class Spectrum(object):
         r"""Residual power sensitivity for this pulsar.
 
         .. math::
-            S_R=\\frac{1}{\mathcal{N}^{-1}}
+            S_R=\frac{1}{\mathcal{N}^{-1}}
 
         """
         if not hasattr(self, '_S_R'):
@@ -408,7 +408,7 @@ class Spectrum(object):
         r"""Characteristic strain sensitivity for this pulsar.
 
         .. math::
-            h_c=\\sqrt{f\;S_I}
+            h_c=\sqrt{f\;S_I}
         """
         if not hasattr(self, '_h_c'):
             self._h_c = np.sqrt(self.freqs * self.S_I)
@@ -419,7 +419,7 @@ class Spectrum(object):
         r"""Energy Density sensitivity.
 
         .. math::
-            \\Omega_{gw}=\\frac{2\\pi^2}{3\;H_0^2}f^3\;S_I
+            \Omega_{gw}=\frac{2\pi^2}{3\;H_0^2}f^3\;S_I
         """
         self._Omega_gw = ((2*np.pi**2/3) * self.freqs**3 * self.S_I
                            / self._H_0.to('Hz').value**2)
