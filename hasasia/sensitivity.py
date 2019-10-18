@@ -613,14 +613,15 @@ class DeterSensitivityCurve(SensitivityCurve):
             self._S_eff = np.power((4./5.) * np.sum(series, axis=0),-1)
         return self._S_eff
 
-    def SNR(self, h_c_0, f_0):
+    def SNR(self, h0_circ, f_0):
         """
         Calculate the signal-to-noise ratio for a inclination and sky-averaged
         monochromatic source given by h_c_0 at the given frequency f_0.
-        f_0 should match the binary frequency given in h_c_0.
+        f_0 should match the binary frequency given in h0_circ.
         """
         indx_f_0 = np.abs(self.freqs-f_0).argmin()
-        return h_0_Circ.to('')*np.sqrt(self.Tspan/self.S_eff[indx_f_0]).value
+        SNR = h0_circ.to('')*np.sqrt(self.Tspan/self.S_eff[indx_f_0])
+        return SNR.value
 
 def HellingsDownsCoeff(phi, theta):
     """
