@@ -13,6 +13,10 @@
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+.. image:: https://joss.theoj.org/papers/d99d7655bd5704ab951157a14df227af/status.svg
+        :target: https://joss.theoj.org/papers/d99d7655bd5704ab951157a14df227af
+        :alt: JOSS Status
+
 A Python package to calculate gravitational-wave sensitivity curves for pulsar timing arrays.
 
 .. image:: https://raw.githubusercontent.com/Hazboun6/hasasia/master/hasasia_calligraphy.jpg
