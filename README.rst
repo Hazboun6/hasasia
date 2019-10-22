@@ -13,6 +13,11 @@
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+.. image:: https://zenodo.org/badge/178294587.svg
+        :target: https://zenodo.org/account/settings/github/repository/Hazboun6/hasasia
+        :alt: Zenodo Badge
+
+
 .. image:: https://joss.theoj.org/papers/d99d7655bd5704ab951157a14df227af/status.svg
         :target: https://joss.theoj.org/papers/d99d7655bd5704ab951157a14df227af
         :alt: JOSS Status
