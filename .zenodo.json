@@ -2,7 +2,7 @@
     "description": "<p>This release reflects changes made during the JOSS refereeing process.</p>",
     "license": "MIT",
     "title": "Hazboun6/hasasia: Hasasia: A Python package for Pulsar Timing Array Sensitivity Curves",
-    "version": "v1.0.3",
+    "version": "v1.0.4",
     "upload_type": "software",
     "publication_date": "2019-10-22",
     "creators": [
@@ -20,13 +20,8 @@
     "related_identifiers": [
         {
             "scheme": "url",
-            "identifier": "https://github.com/Hazboun6/hasasia/tree/v1.0.3",
+            "identifier": "https://github.com/Hazboun6/hasasia/tree/v1.0.4",
             "relation": "isSupplementTo"
         },
-        {
-            "scheme": "doi",
-            "identifier": "10.5281/zenodo.3516353",
-            "relation": "isVersionOf"
-        }
     ]
 }
