@@ -1,6 +1,8 @@
 =======
 History
 =======
+1.0.5 (2019-10-21)
+JOSS/Zenodo Release with various changes from JOSS Refereeing and correct Zenodo `.json`
 1.0.4 (2019-10-21)
 JOSS/Zenodo Release with various changes from JOSS Refereeing and correct Zenodo `.json`
 1.0.3 (2019-10-21)
