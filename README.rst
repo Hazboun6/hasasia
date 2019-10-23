@@ -89,6 +89,7 @@ Otherwise if you would like to reference the Python package use the following
 citation:
 
 .. code-block:: tex
+
   @article{Hazboun2019Hasasia,
          	 journal      = {Journal of Open Source Software},
          	 doi          = {10.21105/joss.01775},
