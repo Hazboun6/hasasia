@@ -69,7 +69,7 @@ PTAs. The Spectrum object has all of the information needed for the pulsar.
 Publication
 -----------
 This work is featured in a publication_, currently released on the arXiv. If you
-would like to reference this work please use the following attribution:
+would like to reference the formalism used in this work please use the following attribution:
 
 .. _publication: https://arxiv.org/pdf/1907.04341.pdf
 
@@ -84,6 +84,29 @@ would like to reference this work please use the following attribution:
            primaryClass   = "gr-qc",
            SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
            }
+
+Otherwise if you would like to reference the Python package use the following
+citation:
+
+.. code-block:: tex
+  @article{Hazboun2019Hasasia,
+         	 journal      = {Journal of Open Source Software},
+         	 doi          = {10.21105/joss.01775},
+         	 issn         = {2475-9066},
+         	 number       = {42},
+         	 publisher    = {The Open Journal},
+           title        = {Hasasia: A Python package for Pulsar Timing Array Sensitivity Curves},
+           url          = {http://dx.doi.org/10.21105/joss.01775},
+         	 volume       = {4},
+         	 author       = {Hazboun, Jeffrey and Romano, Joseph and Smith, Tristan},
+         	 pages        = {1775},
+         	 date         = {2019-10-23},
+         	 year         = {2019},
+         	 month        = {10},
+         	 day          = {23},
+           }
+
+
 
 Credits
 -------
