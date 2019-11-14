@@ -20,11 +20,15 @@ class SkySensitivity(DeterSensitivityCurve):
     Class to make sky maps for deterministic PTA gravitational wave signals.
     Calculated in terms of :math:`\hat{n}=-\hat{k}`.
     '''
-    def __init__(self, spectra, theta_gw, phi_gw):
+    def __init__(self, spectra, theta_gw, phi_gw, pulsar_term=False, pol='gr'):
         super().__init__(spectra)
+        self.pulsar_term = pulsar_term
         self.theta_gw = theta_gw
         self.phi_gw = phi_gw
         self.pos = - khat(self.thetas, self.phis)
+        if pulsar_term:
+            self.pdists = np.array([(sp.pdist/c.c).to('s').value
+                                    for sp in spectra]) #pulsar distances
 
         #Return 3xN array of k,l,m GW position vectors.
         self.K = khat(self.theta_gw, self.phi_gw)
@@ -32,16 +36,45 @@ class SkySensitivity(DeterSensitivityCurve):
         self.M = mhat(self.theta_gw, self.phi_gw)
         LL = np.einsum('ij, kj->ikj', self.L, self.L)
         MM = np.einsum('ij, kj->ikj', self.M, self.M)
+        KK = np.einsum('ij, kj->ikj', self.K, self.K)
         LM = np.einsum('ij, kj->ikj', self.L, self.M)
         ML = np.einsum('ij, kj->ikj', self.M, self.L)
-        self.eplus = LL - MM
+        KM = np.einsum('ij, kj->ikj', self.K, self.M)
+        MK = np.einsum('ij, kj->ikj', self.M, self.K)
+        KL = np.einsum('ij, kj->ikj', self.K, self.L)
+        LK = np.einsum('ij, kj->ikj', self.L, self.K)
+        self.eplus = MM - LL
         self.ecross = LM + ML
+        self.e_b = LL + MM
+        self.e_ell = KK # np.sqrt(2)*
+        self.e_x = KL + LK
+        self.e_y = KM + MK
         num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
         denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
+
         self.D = num[:,:,:,np.newaxis]/denom[np.newaxis, np.newaxis,:,:]
-        self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
-        self.Rcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
-        self.sky_response = self.Rplus**2 + self.Rcross**2
+        if pulsar_term:
+            Dp = self.pdists[:,np.newaxis] * denom
+            Dp = self.freqs[:,np.newaxis,np.newaxis] * Dp[np.newaxis,:,:]
+            self.pt_sqr = np.abs((1-np.exp(-1j*2*np.pi*Dp)))**2
+
+        if pol=='gr':
+            self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
+            self.Rcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
+            self.sky_response = self.Rplus**2 + self.Rcross**2
+        elif pol=='scalar-trans':
+            self.Rbreathe = np.einsum('ijkl, ijl ->kl',self.D, self.e_b)
+            self.sky_response = self.Rbreathe**2
+        elif pol=='scalar-long':
+            self.Rlong = np.einsum('ijkl, ijl ->kl',self.D, self.e_ell)
+            self.sky_response = self.Rlong**2
+        elif pol=='vector-long':
+            self.Rx = np.einsum('ijkl, ijl ->kl',self.D, self.e_x)
+            self.Ry = np.einsum('ijkl, ijl ->kl',self.D, self.e_y)
+            self.sky_response = self.Rx**2 + self.Ry**2
+
+        if pulsar_term:
+            self.sky_response = self.sky_response[np.newaxis,:,:] * self.pt_sqr
 
     def SNR(self, h):
         integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
@@ -80,11 +113,15 @@ class SkySensitivity(DeterSensitivityCurve):
     @property
     def S_SkyI(self):
         """Per Pulsar Strain power sensitivity. """
-        if not hasattr(self, '_S_eff'):
+        if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
-            self._S_SkyI = (RNcalInv.T[:,:,np.newaxis]
+            if self.pulsar_term:
+                self._S_SkyI = RNcalInv.T[:,:,np.newaxis] * self.sky_response
+            else:
+                self._S_SkyI = (RNcalInv.T[:,:,np.newaxis]
                                * self.sky_response[np.newaxis,:,:])
+
         return self._S_SkyI
 
     @property
