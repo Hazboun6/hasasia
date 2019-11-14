@@ -278,13 +278,17 @@ class Pulsar(object):
         Covariance matrix for the pulsar. N_TOA x N_TOA. Made from toaerrs
         if not provided.
 
+    pdist : astropy.quantity, float
+        Earth-pulsar distance. Default units is kpc.
+
     """
     def __init__(self, toas, toaerrs, phi=None, theta=None,
-                 designmatrix=None, N=None):
+                 designmatrix=None, N=None, pdist=1.0*u.kpc):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
+        self.pdist = make_quant(pdist,'kpc')
 
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
@@ -331,6 +335,7 @@ class Spectrum(object):
         self.theta = psr.theta
         self.N = psr.N
         self.designmatrix = psr.designmatrix
+        self.pdist = psr.pdist
         self.Tf_kwargs = Tf_kwargs
         if freqs is None:
             f0 = 1 / get_Tspan([psr])
@@ -717,55 +722,7 @@ def ScalarTensorCoeff(phi, theta, norm='std'):
     cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
                     + np.sin(theta[first]) * np.sin(theta[second]) \
                     * np.cos(phi[first] - phi[second])
-    X = 3/8+1/8*np.cos(cosThetaIJ)
-    chiIJ = [x if x!=0 else 1. for x in X]
-    chiIJ = np.array(chiIJ)
-
-    # calculate rss (root-sum-squared) of Hellings-Downs factor
-    chiRSS = np.sqrt(np.sum(chiIJ**2))
-    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
-
-def ScalarTensorCoeff(phi, theta, norm='std'):
-    """
-    Calculate Scalar-Tensor overlap reduction coefficients for alternative
-    polarizations from two lists of sky positions.
-
-    Parameters
-    ----------
-
-    phi : array, list
-        Pulsar axial coordinate.
-
-    theta : array, list
-        Pulsar azimuthal coordinate.
-
-    Returns
-    -------
-
-    ThetaIJ : array
-        An Npair-long array of angles between pairs of pulsars.
-
-    chiIJ : array
-        An Npair-long array of Scalar Tensor ORF coefficients.
-
-    pairs : array
-        A 2xNpair array of pair indices corresponding to input order of sky
-        coordinates.
-
-    chiRSS : float
-        Root-sum-squared value of all Scalar Tensor ORF coefficients.
-
-    """
-
-    Npsrs = len(phi)
-    # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
-    psr_idx = np.arange(Npsrs)
-    pairs = list(it.combinations(psr_idx,2))
-    first, second = list(map(list, zip(*pairs)))
-    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
-                    + np.sin(theta[first]) * np.sin(theta[second]) \
-                    * np.cos(phi[first] - phi[second])
-    X = 3/8+1/8*np.cos(cosThetaIJ)
+    X = 3/8+1/8*cosThetaIJ
     chiIJ = [x if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
@@ -813,7 +770,7 @@ def DipoleCoeff(phi, theta, norm='std'):
     cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
                     + np.sin(theta[first]) * np.sin(theta[second]) \
                     * np.cos(phi[first] - phi[second])
-    X = 0.5*np.cos(cosThetaIJ)
+    X = 0.5*cosThetaIJ
     chiIJ = [x if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
