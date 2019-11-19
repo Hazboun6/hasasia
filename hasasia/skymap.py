@@ -56,7 +56,9 @@ class SkySensitivity(DeterSensitivityCurve):
         if pulsar_term:
             Dp = self.pdists[:,np.newaxis] * denom
             Dp = self.freqs[:,np.newaxis,np.newaxis] * Dp[np.newaxis,:,:]
-            self.pt_sqr = np.abs((1-np.exp(-1j*2*np.pi*Dp)))**2
+            pt = 1-np.exp(-1j*2*np.pi*Dp)
+            pt /= 2*np.pi*1j*self.freqs[:,np.newaxis,np.newaxis]
+            self.pt_sqr = np.abs(pt)**2
 
         if pol=='gr':
             self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
@@ -74,7 +76,8 @@ class SkySensitivity(DeterSensitivityCurve):
             self.sky_response = self.Rx**2 + self.Ry**2
 
         if pulsar_term:
-            self.sky_response = self.sky_response[np.newaxis,:,:] * self.pt_sqr
+            self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
+                                 * self.pt_sqr)
 
     def SNR(self, h):
         integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
@@ -107,7 +110,10 @@ class SkySensitivity(DeterSensitivityCurve):
     def S_eff(self):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
-            self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
+            if self.pulsar_term:
+                self._S_eff = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
+            else:
+                self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
         return self._S_eff
 
     @property
@@ -117,10 +123,11 @@ class SkySensitivity(DeterSensitivityCurve):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
             if self.pulsar_term:
+                RNcalInv /= resid_response(self.freqs)
                 self._S_SkyI = RNcalInv.T[:,:,np.newaxis] * self.sky_response
             else:
                 self._S_SkyI = (RNcalInv.T[:,:,np.newaxis]
-                               * self.sky_response[np.newaxis,:,:])
+                                * self.sky_response[np.newaxis,:,:])
 
         return self._S_SkyI
 
@@ -134,6 +141,17 @@ class SkySensitivity(DeterSensitivityCurve):
         if not hasattr(self, '_h_c'):
             self._h_c = np.sqrt(self.freqs[:,np.newaxis] * self.S_eff)
         return self._h_c
+
+    @property
+    def S_eff_mean(self):
+        """Strain power sensitivity. """
+        if not hasattr(self, '_S_eff_mean'):
+            mean_sky = np.mean(np.sum(self.S_SkyI, axis=1), axis=1)
+            if self.pulsar_term:
+                self._S_eff_mean = 1.0 / (4./5 * mean_sky)
+            else:
+                self._S_eff_mean = 1.0 / (12./5 * mean_sky)
+        return self._S_eff_mean
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):
