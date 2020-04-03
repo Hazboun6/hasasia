@@ -79,9 +79,27 @@ class SkySensitivity(DeterSensitivityCurve):
             self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
                                  * self.pt_sqr)
 
-    def SNR(self, h):
-        integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
-        return np.sqrt(np.trapz(y=integrand, x=self.freqs, axis=0))
+    # def SNR(self, h):
+    #     '''
+    #
+    #     '''
+    #     # integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
+    #     integrand = h[:,np.newaxis]**2 / self.S_effSky
+    #     return np.sqrt(np.trapz(y=integrand, x=self.freqs, axis=0))
+
+    def SNR(self, h0):
+        '''
+        Calculate the signal-to-noise ratio of a source given the strain
+        amplitude. This is based on Equation (79) from Hazboun, et al., 2019
+        `[1]`_.
+
+        .. math::
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        '''
+
+        return h0 * np.sqrt(self.Tspan / self.S_eff)
 
     def A_gwb(self, h_div_A, SNR=1):
         '''
