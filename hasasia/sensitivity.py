@@ -4,6 +4,7 @@ from __future__ import print_function
 import numpy as np
 import itertools as it
 import scipy.stats as sps
+import scipy.linalg as sl
 import os, pickle
 from astropy import units as u
 
@@ -170,8 +171,8 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     return np.real(Tmat), ff, T
 
 def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
-               exact_yr_freqs = False, full_matrix=False,
-               return_Gtilde_Ncal=False):
+                exact_yr_freqs = False, full_matrix=False,
+                return_Gtilde_Ncal=False, tm_fit=True):
     r"""
     Calculate the inverse-noise-wieghted transmission function for a given
     pulsar. This calculates
@@ -219,11 +220,13 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         nf = len(freqs)
         ff = freqs
 
-    G = G_matrix(psr.designmatrix)
+    if tm_fit:
+        G = G_matrix(psr.designmatrix)
+    else:
+        G = np.eye(toas.size)
     Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
     #N_freqs x N_TOA-N_par
 
-    NTOA = psr.toas
     # Note we do not include factors of NTOA or Timespan as they cancel
     # with the definition of Ncal
     Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
@@ -251,6 +254,7 @@ def resid_response(freqs):
     .. _[1]: https://arxiv.org/abs/1907.04341
     """
     return 1/(12 * np.pi**2 * freqs**2)
+
 
 class Pulsar(object):
     """
@@ -327,7 +331,7 @@ class Spectrum(object):
         various spectral densities.
     """
     def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
-                 freqs=None, **Tf_kwargs):
+                 freqs=None, tm_fit=True, **Tf_kwargs):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
@@ -336,6 +340,7 @@ class Spectrum(object):
         self.N = psr.N
         self.designmatrix = psr.designmatrix
         self.pdist = psr.pdist
+        self.tm_fit = tm_fit
         self.Tf_kwargs = Tf_kwargs
         if freqs is None:
             f0 = 1 / get_Tspan([psr])
@@ -371,16 +376,17 @@ class Spectrum(object):
     def Tf(self):
         if not hasattr(self, '_Tf'):
             self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
-                                       toas=self.toas, N=self.N,
-                                       freqs=self.freqs, from_G=True,
-                                       **self.Tf_kwargs)
+                                  toas=self.toas, N=self.N,
+                                  freqs=self.freqs, from_G=True,
+                                  **self.Tf_kwargs)
         return self._Tf
 
     @property
     def NcalInv(self):
         """Inverse Noise Weighted Transmission Function."""
         if not hasattr(self, '_NcalInv'):
-            self._NcalInv = get_NcalInv(psr=self,freqs=self.freqs)
+            self._NcalInv = get_NcalInv(psr=self, freqs=self.freqs,
+                                        tm_fit=self.tm_fit)
         return self._NcalInv
 
     @property
@@ -621,18 +627,136 @@ class GWBSensitivityCurve(SensitivityCurve):
 
 
 class DeterSensitivityCurve(SensitivityCurve):
-    def __init__(self, spectra):
+    def __init__(self, spectra, include_corr=False, A_GWB=None):
         super().__init__(spectra)
         self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
+        self.include_corr = include_corr
+        if include_corr:
+            self.spectra = spectra
+            if A_GWB is None:
+                self.A_GWB = 1e-15
+            else:
+                self.A_GWB = A_GWB
+            Coff = HellingsDownsCoeff(self.phis, self.thetas)
+            self.ThetaIJ, self.chiIJ, self.pairs, self.chiRSS = Coff
+            self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
+                                  for ii,jj in zip(self.pairs[0],
+                                                   self.pairs[1])])
+            self.NcalInvI = np.array([sp.NcalInv for sp in spectra])
+
 
     @property
     def S_eff(self):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
-            series = t_I[:,np.newaxis] / self.SnI
-            self._S_eff = np.power((4./5.) * np.sum(series, axis=0),-1)
-        return self._S_eff
+            elements = t_I[:,np.newaxis] / self.SnI
+            sum1 = np.sum(elements, axis=0)
+            if self.include_corr:
+                sum = 0
+                ii = self.pairs[0]
+                jj = self.pairs[1]
+                kk = np.arange(len(self.chiIJ))
+                num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]
+                summand = num[:,np.newaxis] * self.NcalInvIJ
+                summand *= resid_response(self.freqs)[np.newaxis,:]
+                sum2 = np.sum(summand, axis=0)
+            self._S_eff = np.power((4./5.) * sum1,-1)
+        return self._S_eff#sum1,sum2
+
+    @property
+    def NcalInvIJ(self):
+        """
+        Inverse Noise Weighted Transmission Function that includes
+        cross-correlation noise from GWB.
+        """
+        if not hasattr(self,'_NcalInvIJ'):
+            self._NcalInvIJ = get_NcalInvIJ(psrs=self.spectra,
+                                            A_GWB=self.A_GWB,
+                                            freqs=self.freqs,
+                                            full_matrix=True)
+
+        return self._NcalInvIJ
+
+
+def HD(phis,thetas):
+    return HellingsDownsCoeff(np.array(phis),np.array(thetas))[1][0]
+
+
+def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
+                  return_Gtilde_Ncal=False):
+    r"""
+    Calculate the inverse-noise-wieghted transmission function for a given
+    pulsar. This calculates
+    :math:`\mathcal{N}^{-1}(f,f') , \; \mathcal{N}^{-1}(f)`
+    in `[1]`_, see Equations (19-20).
+
+    .. _[1]: https://arxiv.org/abs/1907.04341
+
+    Parameters
+    ----------
+
+    psrs : list of hasasia.Pulsar objects
+        List of hasasia.Pulsar objects to build NcalInvIJ
+
+
+    Returns
+    -------
+
+    inverse-noise-weighted transmission function across two pulsars.
+
+    """
+    Npsrs = len(psrs)
+    toas = np.concatenate([p.toas for p in psrs], axis=None)
+    # make filter
+    ff = np.tile(freqs, Npsrs)
+    ## CHANGE BACK
+    # G = sl.block_diag(*[G_matrix(p.designmatrix) for p in psrs])
+    G = sl.block_diag(*[np.eye(p.toas.size) for p in psrs])
+    Gtilde = np.zeros((ff.size, G.shape[1]), dtype='complex128')
+    #N_freqs x N_TOA-N_par
+
+    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
+    # N_freq x N_TOA-N_par
+    #CHANGE BACK
+    # psd = red_noise_powerlaw(A=A_GWB, gamma=13./3, freqs=freqs)
+    psd = 2*(365.25*24*3600/40)*(1e-6)**2
+    Ch_blocks = [[corr_from_psdIJ(freqs=freqs, psd=psd,
+                                  toasI=pc.toas, toasJ=pr.toas,
+                                  fast=True)
+                  for pr in psrs] for pc in psrs]
+
+    C_h = np.block(Ch_blocks)
+
+    #Make spatial correlation matrix, ChiIJ
+    pidx = np.arange(Npsrs)
+    Ntoas = np.array([p.toas.size for p in psrs])
+    blocks = [[(HD([pc.phi,pr.phi],[pc.theta,pr.theta])
+                *np.ones((Ntoas[c],Ntoas[r])))
+               if r!=c
+               else np.ones((Ntoas[c],Ntoas[r]))
+               for r, pr in enumerate(psrs)]
+               for c, pc in enumerate(psrs)]
+
+    ChiIJ = np.block(blocks)
+    C_h *= ChiIJ
+
+    C_n = sl.block_diag(*[p.N for p in psrs])
+    # C_h = sl.block_diag(*[corr_from_psd(freqs=freqs, psd=psd,
+    #                                     toas=p.toas, fast=True) for p in psrs])
+    C = C_n + C_h
+    Ncal = np.matmul(G.T, np.matmul(C, G)) #N_TOA-N_par x N_TOA-N_par
+    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
+
+    TfN = NcalInv#np.matmul(G, np.matmul(NcalInv, G.T))
+    #np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
+
+    if return_Gtilde_Ncal:
+        return np.real(TfN), Gtilde, Ncal
+    elif full_matrix:
+        return np.real(TfN), toas, ChiIJ
+    else:
+        return np.real(np.diag(TfN)) / get_Tspan(psrs)
 
 
 def HellingsDownsCoeff(phi, theta):
@@ -834,6 +958,47 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
+def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
+    """
+    Calculates the correlation matrix over a set of TOAs for a given power
+    spectral density for two pulsars.
+
+    Parameters
+    ----------
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    psd : array
+        Power spectral density to use in calculation of correlation matrix.
+
+    toas : array
+        Pulsar times-of-arrival to use in correlation matrix.
+
+    fast : bool, optional
+        Fast mode uses a matix inner product, while the slower mode uses the
+        numpy.trapz function which is slower, but more accurate.
+
+    Returns
+    -------
+
+    corr : array
+        A 2-dimensional array which represents the correlation matrix for the
+        given set of TOAs.
+    """
+    if fast:
+        df = np.diff(freqs)
+        df = np.append(df,df[-1])
+        tmI = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toasI[:,np.newaxis])
+        tmJ = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toasJ[:,np.newaxis])
+        integrand = np.matmul(tmI, np.conjugate(tmJ.T))
+        return np.real(integrand)
+    else: #Makes much larger arrays, but uses np.trapz
+        t1, t2 = np.meshgrid(toasI, toasJ)
+        tm = np.abs(t1-t2)
+        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     r"""
     Function to quantize and average TOAs by observation epoch. Used especially
@@ -877,9 +1042,9 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
         U[l,i] = 1
 
     if flags is not None:
-        return avetoas, avetoaerrs, aveflags, U
+        return avetoas, avetoaerrs, aveflags, U, bucket_ind
     else:
-        return avetoas, avetoaerrs, U
+        return avetoas, avetoaerrs, U, bucket_ind
 
 def SimCurve():
     raise NotImplementedError()
