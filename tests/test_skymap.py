@@ -46,7 +46,7 @@ cos_theta_gw = np.random.uniform(-1,1,size=1000)
 theta_gw = np.arccos(cos_theta_gw)
 
 SM=hsky.SkySensitivity(spectra,theta_gw, phi_gw)
-hCirc = hsky.h_circ(1e9,200,5e-9,Tspan,SM.freqs).to('')
+hCirc = hsky.h0_circ(1e9,200,5e-9).to('')
 
 SNR = SM.SNR(hCirc.value)
 
