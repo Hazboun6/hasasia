@@ -79,14 +79,6 @@ class SkySensitivity(DeterSensitivityCurve):
             self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
                                  * self.pt_sqr)
 
-    # def SNR(self, h):
-    #     '''
-    #
-    #     '''
-    #     # integrand = 4.0 * h[:,np.newaxis]**2 / self.S_effSky
-    #     integrand = h[:,np.newaxis]**2 / self.S_effSky
-    #     return np.sqrt(np.trapz(y=integrand, x=self.freqs, axis=0))
-
     def SNR(self, h0):
         '''
         Calculate the signal-to-noise ratio of a source given the strain
@@ -100,6 +92,33 @@ class SkySensitivity(DeterSensitivityCurve):
         '''
 
         return h0 * np.sqrt(self.Tspan / self.S_eff)
+
+    def h_thresh(self, SNR=1):
+        '''
+        Method to return a skymap of amplitudes needed to see a circular binary,
+        given the specified SNR. This is based on Equation (80) from Hazboun,
+        et al., 2019 `[1]`_.
+
+        .. math::
+            h_0=\rho(\hat{n})\sqrt{\frac{S_{\rm eff}(f_0 ,\hat{k})}{T_{\rm obs}}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+
+
+        Parameters
+        ----------
+
+        SNR : float, optional
+            Desired signal-to-noise ratio.
+
+        Returns
+        -------
+        An array representing the skymap of amplitudes needed to see the
+        given signal with the SNR threshold specified.
+        '''
+
+        return SNR * np.sqrt(self.S_eff / self.Tspan)
+
 
     def A_gwb(self, h_div_A, SNR=1):
         '''
