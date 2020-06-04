@@ -902,6 +902,53 @@ def DipoleCoeff(phi, theta, norm='std'):
     chiRSS = np.sqrt(np.sum(chiIJ**2))
     return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
 
+def MonopoleCoeff(phi, theta, norm='std'):
+    """
+    Calculate Monopole overlap reduction coefficients from two lists of sky
+    positions.
+
+    Parameters
+    ----------
+
+    phi : array, list
+        Pulsar axial coordinate.
+
+    theta : array, list
+        Pulsar azimuthal coordinate.
+
+    Returns
+    -------
+
+    ThetaIJ : array
+        An Npair-long array of angles between pairs of pulsars.
+
+    chiIJ : array
+        An Npair-long array of Dipole ORF coefficients.
+
+    pairs : array
+        A 2xNpair array of pair indices corresponding to input order of sky
+        coordinates.
+
+    chiRSS : float
+        Root-sum-squared value of all Dipole ORF coefficients.
+
+    """
+
+    Npsrs = len(phi)
+    # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    first, second = list(map(list, zip(*pairs)))
+    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
+                    + np.sin(theta[first]) * np.sin(theta[second]) \
+                    * np.cos(phi[first] - phi[second])
+    chiIJ = np.ones_like(cosThetaIJ)
+
+    # calculate rss (root-sum-squared) of Hellings-Downs factor
+    chiRSS = np.sqrt(np.sum(chiIJ**2))
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
+
+
 def get_Tspan(psrs):
     """
     Returns the total timespan from a list or arry of Pulsar objects, psrs.
