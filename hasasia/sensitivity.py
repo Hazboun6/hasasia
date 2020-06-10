@@ -627,9 +627,23 @@ class GWBSensitivityCurve(SensitivityCurve):
 
 
 class DeterSensitivityCurve(SensitivityCurve):
-    def __init__(self, spectra, include_corr=False, A_GWB=None):
+    def __init__(self, spectra, pulsar_term=False,
+                 include_corr=False, A_GWB=None):
+        '''
+        Parameters
+        ----------
+
+        include_corr : bool
+            Whether to include cross correlations from the GWB as an additional
+            noise source in full PTA correlation matrix.
+            (Has little to no effect and adds a lot of computation time.)
+
+        A_GWB : float
+            Value of GWB amplitude for use in cross correlations.
+        '''
         super().__init__(spectra)
         self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
+        self.pulsar_term = pulsar_term
         self.include_corr = include_corr
         if include_corr:
             self.spectra = spectra
@@ -661,7 +675,8 @@ class DeterSensitivityCurve(SensitivityCurve):
                 summand = num[:,np.newaxis] * self.NcalInvIJ
                 summand *= resid_response(self.freqs)[np.newaxis,:]
                 sum2 = np.sum(summand, axis=0)
-            self._S_eff = np.power((4./5.) * sum1,-1)
+            norm = 4./5 if self.pulsar_term else 2./5
+            self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff#sum1,sum2
 
     @property
