@@ -21,12 +21,36 @@ class SkySensitivity(DeterSensitivityCurve):
     Calculated in terms of :math:`\hat{n}=-\hat{k}`.
     '''
     def __init__(self, spectra, theta_gw, phi_gw, pulsar_term=False, pol='gr'):
+        '''
+        Parameters
+        ----------
+        theta_gw : list, array
+            Gravitational wave source sky location colatitude at which to
+            calculate sky map.
+
+        phi_gw : list, array
+            Gravitational wave source sky location longitude at which to
+            calculate sky map.
+
+        pulsar_term : bool, str, optional [True, False, 'explicit']
+            Flag for including the pulsar term in sky map sensitivity. True
+            includes an idealized factor of two from Equation (36) of `[1]`_.
+            The `'explicit'` flag turns on an explicit calculation of
+            pulsar terms using pulsar distances. (This option takes
+            considerably more computational resources.)
+
+            .. _[1]: https://arxiv.org/abs/1907.04341
+
+        pol: str, optional ['gr','scalar-trans','scalar-long','vector-long']
+            Polarization of gravitational waves to be used in pulsar antenna
+            patterns. Only one can be used at a time.
+        '''
         super().__init__(spectra)
         self.pulsar_term = pulsar_term
         self.theta_gw = theta_gw
         self.phi_gw = phi_gw
         self.pos = - khat(self.thetas, self.phis)
-        if pulsar_term:
+        if pulsar_term == 'explicit':
             self.pdists = np.array([(sp.pdist/c.c).to('s').value
                                     for sp in spectra]) #pulsar distances
 
@@ -53,7 +77,7 @@ class SkySensitivity(DeterSensitivityCurve):
         denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
 
         self.D = num[:,:,:,np.newaxis]/denom[np.newaxis, np.newaxis,:,:]
-        if pulsar_term:
+        if pulsar_term == 'explicit':
             Dp = self.pdists[:,np.newaxis] * denom
             Dp = self.freqs[:,np.newaxis,np.newaxis] * Dp[np.newaxis,:,:]
             pt = 1-np.exp(-1j*2*np.pi*Dp)
@@ -64,7 +88,7 @@ class SkySensitivity(DeterSensitivityCurve):
             self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
             self.Rcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
             self.sky_response = self.Rplus**2 + self.Rcross**2
-        elif pol=='scalar-trans':
+        elif pol=='scalar-trans',:
             self.Rbreathe = np.einsum('ijkl, ijl ->kl',self.D, self.e_b)
             self.sky_response = self.Rbreathe**2
         elif pol=='scalar-long':
@@ -75,7 +99,7 @@ class SkySensitivity(DeterSensitivityCurve):
             self.Ry = np.einsum('ijkl, ijl ->kl',self.D, self.e_y)
             self.sky_response = self.Rx**2 + self.Ry**2
 
-        if pulsar_term:
+        if pulsar_term == 'explicit':
             self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
                                  * self.pt_sqr)
 
@@ -147,10 +171,12 @@ class SkySensitivity(DeterSensitivityCurve):
     def S_eff(self):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
-            if self.pulsar_term:
+            if self.pulsar_term == 'explicit':
                 self._S_eff = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
-            else:
+            elif self.pulsar_term:
                 self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
+            else:
+                self._S_eff = 1.0 / (6./5 * np.sum(self.S_SkyI, axis=1))
         return self._S_eff
 
     @property
