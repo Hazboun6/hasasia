@@ -564,16 +564,17 @@ class GWBSensitivityCurve(SensitivityCurve):
     r"""
     Class to produce a sensitivity curve for a gravitational wave
     background, using Hellings-Downs spatial correlations.
-    """
-    def __init__(self, spectra, orf='hd'):
-        """
-        Parameters
-        ----------
 
-        orf : str, optional, ['hd','st','dipole','monopole']
-            Overlap reduction function to be used in the sensitivity curve.
-            Maybe be Hellings-Downs, Scalar-Tensor, Dipole or Monopole.
-        """
+    Parameters
+    ----------
+    orf : str, optional {'hd', 'st', 'dipole', 'monopole'}
+        Overlap reduction function to be used in the sensitivity curve.
+        Maybe be Hellings-Downs, Scalar-Tensor, Dipole or Monopole.
+
+    """
+
+    def __init__(self, spectra, orf='hd'):
+
         super().__init__(spectra)
         if orf == 'hd':
             Coff = HellingsDownsCoeff(self.phis, self.thetas)
@@ -627,20 +628,20 @@ class GWBSensitivityCurve(SensitivityCurve):
 
 
 class DeterSensitivityCurve(SensitivityCurve):
+    '''
+    Parameters
+    ----------
+
+    include_corr : bool
+        Whether to include cross correlations from the GWB as an additional
+        noise source in full PTA correlation matrix.
+        (Has little to no effect and adds a lot of computation time.)
+
+    A_GWB : float
+        Value of GWB amplitude for use in cross correlations.
+    '''
     def __init__(self, spectra, pulsar_term=False,
                  include_corr=False, A_GWB=None):
-        '''
-        Parameters
-        ----------
-
-        include_corr : bool
-            Whether to include cross correlations from the GWB as an additional
-            noise source in full PTA correlation matrix.
-            (Has little to no effect and adds a lot of computation time.)
-
-        A_GWB : float
-            Value of GWB amplitude for use in cross correlations.
-        '''
         super().__init__(spectra)
         self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
         self.pulsar_term = pulsar_term

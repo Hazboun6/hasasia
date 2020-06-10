@@ -19,32 +19,31 @@ class SkySensitivity(DeterSensitivityCurve):
     r'''
     Class to make sky maps for deterministic PTA gravitational wave signals.
     Calculated in terms of :math:`\hat{n}=-\hat{k}`.
+
+    Parameters
+    ----------
+    theta_gw : list, array
+        Gravitational wave source sky location colatitude at which to
+        calculate sky map.
+
+    phi_gw : list, array
+        Gravitational wave source sky location longitude at which to
+        calculate sky map.
+
+    pulsar_term : bool, str, optional [True, False, 'explicit']
+        Flag for including the pulsar term in sky map sensitivity. True
+        includes an idealized factor of two from Equation (36) of `[1]`_.
+        The `'explicit'` flag turns on an explicit calculation of
+        pulsar terms using pulsar distances. (This option takes
+        considerably more computational resources.)
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+
+    pol: str, optional ['gr','scalar-trans','scalar-long','vector-long']
+        Polarization of gravitational waves to be used in pulsar antenna
+        patterns. Only one can be used at a time.
     '''
     def __init__(self, spectra, theta_gw, phi_gw, pulsar_term=False, pol='gr'):
-        '''
-        Parameters
-        ----------
-        theta_gw : list, array
-            Gravitational wave source sky location colatitude at which to
-            calculate sky map.
-
-        phi_gw : list, array
-            Gravitational wave source sky location longitude at which to
-            calculate sky map.
-
-        pulsar_term : bool, str, optional [True, False, 'explicit']
-            Flag for including the pulsar term in sky map sensitivity. True
-            includes an idealized factor of two from Equation (36) of `[1]`_.
-            The `'explicit'` flag turns on an explicit calculation of
-            pulsar terms using pulsar distances. (This option takes
-            considerably more computational resources.)
-
-            .. _[1]: https://arxiv.org/abs/1907.04341
-
-        pol: str, optional ['gr','scalar-trans','scalar-long','vector-long']
-            Polarization of gravitational waves to be used in pulsar antenna
-            patterns. Only one can be used at a time.
-        '''
         super().__init__(spectra)
         self.pulsar_term = pulsar_term
         self.theta_gw = theta_gw
