@@ -103,7 +103,7 @@ class SkySensitivity(DeterSensitivityCurve):
                                  * self.pt_sqr)
 
     def SNR(self, h0):
-        '''
+        r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
         `[1]`_.
