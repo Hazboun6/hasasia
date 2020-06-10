@@ -88,7 +88,7 @@ class SkySensitivity(DeterSensitivityCurve):
             self.Rplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
             self.Rcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
             self.sky_response = self.Rplus**2 + self.Rcross**2
-        elif pol=='scalar-trans',:
+        elif pol=='scalar-trans':
             self.Rbreathe = np.einsum('ijkl, ijl ->kl',self.D, self.e_b)
             self.sky_response = self.Rbreathe**2
         elif pol=='scalar-long':
