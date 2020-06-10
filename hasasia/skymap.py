@@ -118,7 +118,7 @@ class SkySensitivity(DeterSensitivityCurve):
         return h0 * np.sqrt(self.Tspan / self.S_eff)
 
     def h_thresh(self, SNR=1):
-        '''
+        r'''
         Method to return a skymap of amplitudes needed to see a circular binary,
         given the specified SNR. This is based on Equation (80) from Hazboun,
         et al., 2019 `[1]`_.
