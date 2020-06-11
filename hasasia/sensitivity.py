@@ -640,7 +640,7 @@ class DeterSensitivityCurve(SensitivityCurve):
     A_GWB : float
         Value of GWB amplitude for use in cross correlations.
     '''
-    def __init__(self, spectra, pulsar_term=False,
+    def __init__(self, spectra, pulsar_term=True,
                  include_corr=False, A_GWB=None):
         super().__init__(spectra)
         self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
