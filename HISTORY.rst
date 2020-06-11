@@ -1,6 +1,8 @@
 =======
 History
 =======
+1.1.0 (2020-06-11)
+Various extra functionality added, including non-GR polarizations and pulsar term flags.
 1.0.5 (2019-10-21)
 JOSS/Zenodo Release with various changes from JOSS Refereeing and correct Zenodo `.json`
 1.0.4 (2019-10-21)
