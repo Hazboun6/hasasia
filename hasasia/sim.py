@@ -11,7 +11,8 @@ day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
 def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
-            A_rn=None, alpha=None, freqs=None):
+            A_rn=None, alpha=None, freqs=None, uneven=False, A_gwb=None,
+            kwastro={'RADEC':True, 'PROPER':True, 'PX':True}):
     """
     Make a simulated pulsar timing array. Using the available parameters,
     the function returns a list of pulsar objects encoding them.
@@ -47,6 +48,9 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
     freqs : array, optional
         Array of frequencies at which to calculate the red noise. Same
         array used for all pulsars.
+
+    uneven : bool, optional
+        Option to have the toas be unevenly sampled.
 
     Returns
     -------
@@ -88,10 +92,16 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
 
     psrs = []
     err_dim = pars['sigma'].ndim
+    Timespan = np.amax(pars['timespan'])
     for ii in range(Npsrs):
-        Ntoas = int(np.floor(pars['timespan'][ii]*pars['cad'][ii]))
+        tspan = pars['timespan'][ii]
+        Ntoas = int(np.floor(tspan*pars['cad'][ii]))
+        delay = Timespan - tspan
+        toas = np.linspace(delay, Timespan, Ntoas)*yr_sec
+        if uneven:
+            dt = tspan / Ntoas / 4 * yr_sec
+            toas += np.random.uniform(-dt, dt, size=toas.size)
 
-        toas = np.linspace(0, pars['timespan'][ii]*yr_sec, Ntoas)
         if err_dim == 2:
             toaerrs = pars['sigma'][ii,:]
         else:
@@ -103,9 +113,17 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
                                       alpha=pars['alpha'][ii],
                                       freqs=freqs)
             N += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
-        M = create_design_matrix(toas, RADEC=True, PROPER=True, PX=True)
+
+        if A_gwb is not None:
+            gwb = red_noise_powerlaw(A=A_gwb,
+                                     alpha=-2/3.,
+                                     freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas)
+
+        M = create_design_matrix(toas, **kwastro)
+
         p = Pulsar(toas, toaerrs, phi=pars['phi'][ii],
-                   theta=pars['theta'][ii], N=N)
+                   theta=pars['theta'][ii], designmatrix=M, N=N)
         psrs.append(p)
 
     return psrs

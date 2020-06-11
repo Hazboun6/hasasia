@@ -8,7 +8,7 @@ __all__ = ['create_design_matrix',
 day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
-def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
+def create_design_matrix(toas, RADEC=False, PROPER=False, PX=False):
     """
     Return designmatrix for quadratic spindown model + optional
     astrometric parameters
@@ -50,14 +50,14 @@ def create_design_matrix(toas, RADEC=True, PROPER=False, PX=False):
         if model[ii] == 'QSD': #quadratic spin down fit
             designmatrix[:,ii] = toas**(ii) #Cute
         if model[ii] == 'RA':
-            designmatrix[:,ii] = np.sin(2*np.pi/3.16e7*toas)
+            designmatrix[:,ii] = np.sin(2*np.pi/yr_sec*toas)
         if model[ii] == 'DEC':
-            designmatrix[:,ii] = np.cos(2*np.pi/3.16e7*toas)
+            designmatrix[:,ii] = np.cos(2*np.pi/yr_sec*toas)
         if model[ii] == 'PRA':
-            designmatrix[:,ii] = toas*np.sin(2*np.pi/3.16e7*toas)
+            designmatrix[:,ii] = toas*np.sin(2*np.pi/yr_sec*toas)
         if model[ii] == 'PDEC':
-            designmatrix[:,ii] = toas*np.cos(2*np.pi/3.16e7*toas)
+            designmatrix[:,ii] = toas*np.cos(2*np.pi/yr_sec*toas)
         if model[ii] == 'PX':
-            designmatrix[:,ii] = np.cos(4*np.pi/3.16e7*toas)
+            designmatrix[:,ii] = np.cos(4*np.pi/yr_sec*toas)
 
     return designmatrix

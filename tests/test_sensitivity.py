@@ -89,6 +89,18 @@ def test_sensitivity_w_rednoise():
     sc3b.h_c
     sc3b.Omega_gw
 
+def test_nonGR():
+    psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
+                        phi=phi,theta=theta)
+    spectra = []
+    for p in psrs:
+        sp = hsen.Spectrum(p, freqs=freqs)
+        _ = sp.NcalInv
+        spectra.append(sp)
+
+    hsen.GWBSensitivityCurve(spectra, orf='st')
+    hsen.GWBSensitivityCurve(spectra, orf='dipole')
+    hsen.GWBSensitivityCurve(spectra, orf='monopole')
 
 def test_PI_sensitivity(sc_simple):
     # Power Law-Integrated Sensitivity Curves
@@ -99,3 +111,8 @@ def test_PI_sensitivity(sc_simple):
     plaw_h = hgw*(sc1a.freqs/fyr)**(-2/3)
     PI_sc, plaw = hsen.PI_hc(freqs=sc1a.freqs, Tspan=sc1a.Tspan,
                              SNR=3, S_eff=sc1a.S_eff, N=30)
+
+def test_get_NcalInvIJ():
+    psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
+                        phi=phi,theta=theta)
+    hsen.get_NcalInvIJ(psrs, 1e-15, freqs)
