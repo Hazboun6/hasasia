@@ -75,15 +75,24 @@ would like to reference the formalism used in this work please use the following
 
 .. code-block:: tex
 
-  @article{Hazboun:2019vhv,
-           author         = "Hazboun, Jeffrey S. and Romano, Joseph D. and Smith, Tristan L.",
-           title          = "{Realistic sensitivity curves for pulsar timing arrays}",
-           year           = "2019",
-           eprint         = "1907.04341",
-           archivePrefix  = "arXiv",
-           primaryClass   = "gr-qc",
-           SLACcitation   = "%%CITATION = ARXIV:1907.04341;%%"
-           }
+ @article{Hazboun:2019vhv,
+             author = {{Hazboun}, Jeffrey S. and {Romano}, Joseph D. and {Smith}, Tristan L.},
+              title = "{Realistic sensitivity curves for pulsar timing arrays}",
+            journal = {\prd},
+           keywords = {General Relativity and Quantum Cosmology, Astrophysics - Instrumentation and Methods for Astrophysics},
+               year = 2019,
+              month = nov,
+             volume = {100},
+             number = {10},
+                eid = {104028},
+              pages = {104028},
+                doi = {10.1103/PhysRevD.100.104028},
+        archivePrefix = {arXiv},
+             eprint = {1907.04341},
+        primaryClass = {gr-qc},
+             adsurl = {https://ui.adsabs.harvard.edu/abs/2019PhRvD.100j4028H},
+            adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+          }
 
 Otherwise if you would like to reference the Python package use the following
 citation:
