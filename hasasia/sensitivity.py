@@ -774,6 +774,14 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
     else:
         return np.real(np.diag(TfN)) / get_Tspan(psrs)
 
+    def SNR(self, h_0, f_0):
+        """
+        Calculate the signal-to-noise ratio for a deterministic signal
+        with strain given by h_0 at the frequency f_0.
+        """
+        indx_f_0 = np.abs(self.freqs-f_0).argmin()
+        SNR = h_0*np.sqrt(self.Tspan/self.S_eff[indx_f_0])
+        return SNR.to('').value
 
 def HellingsDownsCoeff(phi, theta):
     """
