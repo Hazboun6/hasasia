@@ -43,7 +43,7 @@ class SkySensitivity(DeterSensitivityCurve):
         Polarization of gravitational waves to be used in pulsar antenna
         patterns. Only one can be used at a time.
     '''
-    def __init__(self, spectra, theta_gw, phi_gw, pulsar_term=False, pol='gr'):
+    def __init__(self, spectra, theta_gw, phi_gw, pulsar_term=True, pol='gr'):
         super().__init__(spectra)
         self.pulsar_term = pulsar_term
         self.theta_gw = theta_gw

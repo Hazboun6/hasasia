@@ -48,6 +48,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/Hazboun6/hasasia',
-    version='1.0.5',
+    version='1.1.0',
     zip_safe=False,
 )
