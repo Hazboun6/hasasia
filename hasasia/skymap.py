@@ -184,7 +184,7 @@ class SkySensitivity(DeterSensitivityCurve):
         if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
-            if self.pulsar_term:
+            if self.pulsar_term == 'explicit':
                 RNcalInv /= resid_response(self.freqs)
                 self._S_SkyI = RNcalInv.T[:,:,np.newaxis] * self.sky_response
             else:
