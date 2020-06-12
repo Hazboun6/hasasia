@@ -678,7 +678,7 @@ class DeterSensitivityCurve(SensitivityCurve):
                 sum2 = np.sum(summand, axis=0)
             norm = 4./5 if self.pulsar_term else 2./5
             self._S_eff = np.power(norm * sum1,-1)
-        return self._S_eff#sum1,sum2
+        return self._S_eff
 
     @property
     def NcalInvIJ(self):

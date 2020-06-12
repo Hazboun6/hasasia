@@ -1,6 +1,8 @@
 =======
 History
 =======
+1.1.1 (2020-06-11)
+Fix pulsar term functionality in SkySensitivity
 1.1.0 (2020-06-11)
 Various extra functionality added, including non-GR polarizations and pulsar term flags.
 1.0.5 (2019-10-21)
