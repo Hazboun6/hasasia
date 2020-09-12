@@ -15,6 +15,8 @@ def test_skymap_tutorial():
     sp.call(juno_command+'skymap_tutorial.ipynb',
             shell=True)
 
-def test_pulse_profiles_tutorial_3():
+''' This would require enterprise and NANOGrav data...
+def test_real_data_tutorial():
     sp.call(juno_command+'real_data_tutorial.ipynb',
             shell=True)
+'''
