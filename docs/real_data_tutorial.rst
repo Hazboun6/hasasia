@@ -1,4 +1,3 @@
-
 .. module:: hasasia
 
 .. note:: This tutorial was generated from a Jupyter notebook that can be
@@ -103,7 +102,7 @@ Here we collate the noise parameters into one large dictionary.
 .. code:: python
 
     noise = {}
-
+    
     for nf in noise_files:
         with open(nf,'r') as fin:
             noise.update(json.load(fin))
@@ -157,22 +156,26 @@ For a detailed treatment of the noise modeling see `Lam, et al.,
     def make_corr(psr):
         N = psr.toaerrs.size
         corr = np.zeros((N,N))
-        _, _, U = hsen.quantize_fast(psr.toas,psr.toaerrs,dt=1)
-        u = np.matmul(U,U.T)
+        _, _, fl, _, bi = hsen.quantize_fast(psr.toas,psr.toaerrs,
+                                             flags=psr.flags['f'],dt=1)
         keys = [ky for ky in noise.keys() if psr.name in ky]
         backends = np.unique(psr.flags['f'])
         sigma_sqr = np.zeros(N)
-        ecorrs = np.zeros(N)
+        ecorrs = np.zeros_like(fl,dtype=float)
         for be in backends:
-            mask = np.where(ePsr.flags['f']==be)
-            key_ec = '{0}_{1}_log10_{2}'.format(psr.name,be,'ecorr')
-            ecorrs[mask] = np.ones_like(mask) * (10**noise[key_ec])**2
+            mask = np.where(psr.flags['f']==be)
             key_ef = '{0}_{1}_{2}'.format(psr.name,be,'efac')
             key_eq = '{0}_{1}_log10_{2}'.format(psr.name,be,'equad')
             sigma_sqr[mask] = (noise[key_ef]**2 * (psr.toaerrs[mask]**2)
                                + (10**noise[key_eq])**2)
-
-        corr = np.diag(sigma_sqr) + np.diag(u*ecorrs**2)
+            mask_ec = np.where(fl==be)
+            key_ec = '{0}_{1}_log10_{2}'.format(psr.name,be,'ecorr')
+            ecorrs[mask_ec] = np.ones_like(mask_ec) * (10**noise[key_ec])
+        j = [ecorrs[ii]**2*np.ones((len(bucket),len(bucket)))
+             for ii, bucket in enumerate(bi)]
+    
+        J = sl.block_diag(*j)
+        corr = np.diag(sigma_sqr) + J
         return corr
 
 Below we enter the red noise values from the NANOGrav 11-year data set
@@ -222,23 +225,27 @@ thinnned by a factor of ten. NANOGrav keeps many TOAs from a given
 observation (often >50), which are not necessary to characterize the
 sensitivity of the PTA. The differences in these TOAs would only be
 needed to characterize frequencies much higher than investigated here.
+Here we thin the TOAs because there are upwards of ~50 TOAs per
+observing epoch in NANOGrav ``tim`` files and we don’t need all of these
+to characterize the sensitivity we are interested in. If one has the
+memory capabilities then the more data the better.
 
 .. code:: python
 
     psrs = []
-    thin = 10
+    thin = 10 
     for ePsr in ePsrs:
         corr = make_corr(ePsr)[::thin,::thin]
         plaw = hsen.red_noise_powerlaw(A=9e-16, gamma=13/3., freqs=freqs)
         if ePsr.name in rn_psrs.keys():
             Amp, gam = rn_psrs[ePsr.name]
             plaw += hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
-
+            
         corr += hsen.corr_from_psd(freqs=freqs, psd=plaw,
                                    toas=ePsr.toas[::thin])
         psr = hsen.Pulsar(toas=ePsr.toas[::thin],
                           toaerrs=ePsr.toaerrs[::thin],
-                          phi=ePsr.phi,theta=ePsr.theta,
+                          phi=ePsr.phi,theta=ePsr.theta, 
                           N=corr, designmatrix=ePsr.Mmat[::thin,:])
         psr.name = ePsr.name
         psrs.append(psr)
@@ -320,7 +327,7 @@ highlighted.
             plt.loglog(sp.freqs,sp.h_c,lw=2,label=p.name)
         else:
             plt.loglog(sp.freqs,sp.h_c, color='k',lw=0.2)
-
+    
     plt.legend()
     plt.show()
     plt.close()
@@ -394,12 +401,12 @@ or index, or an array of them.
                                  SNR=SNR,
                                  S_eff=ng11yr_sc.S_eff)
     plaw_h = hgw*(ng11yr_sc.freqs/fyr)**(-2/3)
-
-    #And for an array of alpha values.
+    
+    #And for an array of alpha values. 
     alpha = np.linspace(-7/4,5/4,30)
     h=hsen.Agwb_from_Seff_plaw(freqs=ng11yr_sc.freqs,Tspan=Tspan,SNR=SNR,
                                S_eff=ng11yr_sc.S_eff,alpha=alpha)
-
+    
     plaw = np.dot((ng11yr_sc.freqs[:,np.newaxis]/fyr)**alpha,
                   h[:,np.newaxis]*np.eye(30))
 
@@ -409,7 +416,7 @@ or index, or an array of them.
         plt.loglog(ng11yr_sc.freqs,plaw[:,ii],
                    color='gray',lw=0.5)
     plt.loglog(ng11yr_sc.freqs,plaw_h,color='C1',lw=2,
-               label='SNR={0}, '.format(SNR)+r'$\alpha=-2/3$')
+               label='SNR={0}, '.format(SNR)+r'$\alpha=-2/3$')  
     plt.loglog(ng11yr_sc.freqs,ng11yr_sc.h_c, label='NG 11yr Sensitivity')
     plt.xlabel('Frequency [Hz]')
     plt.ylabel('Characteristic Strain, $h_c$')
@@ -472,7 +479,7 @@ PTA ``GWBSensitivityCurve``.
                        label=lbl,lw=2, color=col[j],linestyle=linestyle[j],
                        zorder=1)
             j+=1
-
+            
     for nn,(ii,jj) in enumerate(zip(ng11yr_sc.pairs[0],ng11yr_sc.pairs[1])):
         pair = psr_names[ii], psr_names[jj]
         if ('J1713+0747' in pair and 'J1903+0327' in pair):
@@ -482,7 +489,7 @@ PTA ``GWBSensitivityCurve``.
                        label=lbl,lw=2, color=col[j],linestyle=linestyle[j],
                        zorder=2)
             j+=1
-
+            
     for nn,(ii,jj) in enumerate(zip(ng11yr_sc.pairs[0],ng11yr_sc.pairs[1])):
         pair = psr_names[ii], psr_names[jj]
         if ('J1713+0747' in pair and 'J1909-3744' in pair):
@@ -491,8 +498,8 @@ PTA ``GWBSensitivityCurve``.
                        np.sqrt(ng11yr_sc.S_effIJ[nn]*ng11yr_sc.freqs),
                        label=lbl,lw=2, color=col[j],linestyle=linestyle[j],
                        zorder=4)
-            j+=1
-
+            j+=1   
+            
     for nn,(ii,jj) in enumerate(zip(ng11yr_sc.pairs[0],ng11yr_sc.pairs[1])):
         pair = psr_names[ii], psr_names[jj]
         if ('J1713+0747' in pair and 'J1744-1134' in pair):
@@ -501,8 +508,8 @@ PTA ``GWBSensitivityCurve``.
                        np.sqrt(ng11yr_sc.S_effIJ[nn]*ng11yr_sc.freqs),
                        label=lbl,lw=2, color=col[j],linestyle=linestyle[j],
                        zorder=3)
-            j+=1
-
+            j+=1        
+    
     plt.rc('text', usetex=True)
     plt.xlabel('Frequency [Hz]')
     plt.ylabel('$h_c$')
@@ -589,7 +596,7 @@ See the ``SkySenstivity`` tutorial for more details.
     ax = plt.gca()
     image = ax.get_images()[0]
     cmap = fig.colorbar(image, ax=ax,orientation='horizontal',shrink=0.8,pad=0.05)
-
+    
     plt.rcParams.update({'font.size':22,'text.usetex':True})
     ax.set_title("SNR for Single Source")
     plt.show()
@@ -624,12 +631,12 @@ See the ``SkySenstivity`` tutorial for more details.
     hp.visufunc.projscatter(SM.thetas,SM.phis,marker='*',
                             color='white',edgecolors='k',s=200)
     hp.graticule()
-    #
+    # 
     fig = plt.gcf()
     ax = plt.gca()
     image = ax.get_images()[0]
     cbar_ticks = [2.02e-15,1e-14]
-
+    
     plt.rcParams.update({'font.size':22,'text.usetex':True})
     def fmt(x, pos):
         a, b = '{:.1e}'.format(x).split('e')
@@ -674,3 +681,5 @@ See the ``SkySenstivity`` tutorial for more details.
 
 
 .. image:: real_data_tutorial_files/real_data_tutorial_58_1.png
+
+
