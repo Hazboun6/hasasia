@@ -19,6 +19,7 @@ First we import some important modules.
 .. code:: python
 
     import numpy as np
+    import scipy.linalg as sl
     import matplotlib.pyplot as plt
     %matplotlib inline
 
