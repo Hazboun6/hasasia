@@ -659,6 +659,18 @@ class DeterSensitivityCurve(SensitivityCurve):
                                                    self.pairs[1])])
             self.NcalInvI = np.array([sp.NcalInv for sp in spectra])
 
+    def SNR(self, h0):
+        r'''
+        Calculate the signal-to-noise ratio of a source given the strain
+        amplitude. This is based on Equation (79) from Hazboun, et al., 2019
+        `[1]`_.
+
+        .. math::
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        '''     
+        return h0 * np.sqrt(self.Tspan / self.S_eff)
 
     @property
     def S_eff(self):
