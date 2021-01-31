@@ -6,8 +6,8 @@
 .. image:: https://img.shields.io/pypi/v/hasasia.svg
         :target: https://pypi.python.org/pypi/hasasia
 
-.. image:: https://img.shields.io/travis/Hazboun6/hasasia.svg
-        :target: https://travis-ci.org/Hazboun6/hasasia
+.. image:: https://github.com/Hazboun6/hasasia/workflows/Build/badge.svg
+        :target: https://github.com/Hazboun6/hasasia/actions
 
 .. image:: https://readthedocs.org/projects/hasasia/badge/?version=latest
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
