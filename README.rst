@@ -13,6 +13,9 @@
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+.. image:: https://codecov.io/gh/Hazboun6/hasasia/branch/master/graph/badge.svg?token=GBKYR808FO
+        :target: https://codecov.io/gh/Hazboun6/hasasia
+
 .. image:: https://zenodo.org/badge/178294587.svg
         :target: https://zenodo.org/account/settings/github/repository/Hazboun6/hasasia
         :alt: Zenodo Badge
