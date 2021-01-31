@@ -4,7 +4,7 @@ twine>=1.12.1
 numpydoc>=0.8.0
 
 numpy>=1.12
-matplotlib >=3.0
-scipy >= 1.0
-astropy >= 3.0
-healpy >= 1.11
+matplotlib>=3.0
+scipy>=1.0
+astropy>=3.0
+healpy>=1.11
