@@ -2,10 +2,14 @@ name: Build
 
 on:
   push:
-#    branches:
-#    - master
+   branches:
+   - master
   pull_request:
-
+   branches:
+   - master
+  release:
+    types:
+      - published
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -27,7 +31,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Pre-install
       run: |
-        sudo apt-get install libsuitesparse-dev
         python -m pip install --upgrade pip
     - name: Install Dependencies
       run: |
@@ -47,4 +50,29 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         fail_ci_if_error: true
-  
+
+  deploy:
+    needs: [tests, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine
+    - name: Download wheel/dist from build
+      uses: actions/download-artifact@v2
+      with:
+        name: dist
+        path: dist
+    - name: Build and publish
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: |
+        twine upload dist/*
