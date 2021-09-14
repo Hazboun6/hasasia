@@ -1,6 +1,9 @@
 =======
 History
 =======
+1.2.1 (2021-09-14)
+Fix autodeploy
+
 1.2.0 (2021-09-14)
 Added new single source functionality to SkyMap.
 
