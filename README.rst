@@ -6,12 +6,15 @@
 .. image:: https://img.shields.io/pypi/v/hasasia.svg
         :target: https://pypi.python.org/pypi/hasasia
 
-.. image:: https://img.shields.io/travis/Hazboun6/hasasia.svg
-        :target: https://travis-ci.org/Hazboun6/hasasia
+.. image:: https://github.com/Hazboun6/hasasia/workflows/Build/badge.svg
+        :target: https://github.com/Hazboun6/hasasia/actions
 
 .. image:: https://readthedocs.org/projects/hasasia/badge/?version=latest
         :target: https://hasasia.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
+
+.. image:: https://codecov.io/gh/Hazboun6/hasasia/branch/master/graph/badge.svg?token=GBKYR808FO
+        :target: https://codecov.io/gh/Hazboun6/hasasia
 
 .. image:: https://zenodo.org/badge/178294587.svg
         :target: https://zenodo.org/account/settings/github/repository/Hazboun6/hasasia

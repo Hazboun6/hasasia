@@ -10,4 +10,5 @@ twine>=1.12.1
 numpydoc>=0.8.0
 
 pytest>=3.8.2
+pytest-cov>=2.0
 pytest-runner>=4.2
