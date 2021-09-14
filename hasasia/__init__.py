@@ -4,7 +4,7 @@
 
 __author__ = """Jeffrey S. Hazboun"""
 __email__ = 'jeffrey.hazboun@gmail.com'
-__version__ = '1.1.2'
+__version__ = '1.2.0'
 
 citation = 'Hazboun, J.S., Romano, J.R., Smith, T.L. '
 citation += 'Realistic sensitivity curves for pulsar timing arrays. '

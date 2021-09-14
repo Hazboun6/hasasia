@@ -1,6 +1,9 @@
 =======
 History
 =======
+1.2.0 (2021-09-14)
+Added new single source functionality to SkyMap.
+
 1.1.2 (2020-09-12)
 Added test for the tutorials and a new version of make_corr.
 
