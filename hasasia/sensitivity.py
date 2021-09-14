@@ -390,6 +390,14 @@ class Spectrum(object):
         return self._NcalInv
 
     @property
+    def P_n(self):
+        """Inverse Noise Weighted Transmission Function."""
+        if not hasattr(self, '_P_n'):
+            self._P_n = np.power(get_NcalInv(psr=self, freqs=self.freqs,
+                                             tm_fit=False), -1)
+        return self._P_n
+
+    @property
     def S_I(self):
         r"""Strain power sensitivity for this pulsar. Equation (74) in `[1]`_
 
@@ -573,11 +581,11 @@ class GWBSensitivityCurve(SensitivityCurve):
 
     """
 
-    def __init__(self, spectra, orf='hd'):
+    def __init__(self, spectra, orf='hd',autocorr=False):
 
         super().__init__(spectra)
         if orf == 'hd':
-            Coff = HellingsDownsCoeff(self.phis, self.thetas)
+            Coff = HellingsDownsCoeff(self.phis, self.thetas, autocorr=autocorr)
         elif orf == 'st':
             Coff = ScalarTensorCoeff(self.phis, self.thetas)
         elif orf == 'dipole':
@@ -669,7 +677,7 @@ class DeterSensitivityCurve(SensitivityCurve):
             \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
-        '''     
+        '''
         return h0 * np.sqrt(self.Tspan / self.S_eff)
 
     @property
@@ -787,7 +795,7 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
         return np.real(np.diag(TfN)) / get_Tspan(psrs)
 
 
-def HellingsDownsCoeff(phi, theta):
+def HellingsDownsCoeff(phi, theta, autocorr=False):
     """
     Calculate Hellings and Downs coefficients from two lists of sky positions.
 
@@ -826,6 +834,10 @@ def HellingsDownsCoeff(phi, theta):
     cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
                     + np.sin(theta[first]) * np.sin(theta[second]) \
                     * np.cos(phi[first] - phi[second])
+    if autocorr:
+        first.extend(psr_idx)
+        second.extend(psr_idx)
+        cosThetaIJ = np.append(cosThetaIJ,np.zeros(Npsrs))
     X = (1. - cosThetaIJ) / 2.
     chiIJ = [1.5*x*np.log(x) - 0.25*x + 0.5 if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
@@ -1072,7 +1084,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         t1, t2 = np.meshgrid(toasI, toasJ)
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+        return np.trapz(integrand, axis=2, x=freqs)
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     r"""
