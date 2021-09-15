@@ -1,6 +1,9 @@
 =======
 History
 =======
+1.2.3 (2021-09-14)
+Remove pytest-runner from setup.py
+
 1.2.2 (2021-09-14)
 Check Build status
 
