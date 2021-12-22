@@ -1110,7 +1110,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         integrand = np.matmul(tmI, np.conjugate(tmJ.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toasI, toasJ)
+        t1, t2 = np.meshgrid(toasI, toasJ,indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
