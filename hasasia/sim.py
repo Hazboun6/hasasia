@@ -12,6 +12,7 @@ yr_sec = 365.25*24*3600
 
 def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
             A_rn=None, alpha=None, freqs=None, uneven=False, A_gwb=None,
+            fast=True,
             kwastro={'RADEC':True, 'PROPER':True, 'PX':True}):
     """
     Make a simulated pulsar timing array. Using the available parameters,
@@ -51,6 +52,10 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
 
     uneven : bool, optional
         Option to have the toas be unevenly sampled.
+
+    fast : bool, optional
+        Option to use the faster, less accurate PSD-to-correlation matrix
+        calculation.
 
     Returns
     -------
@@ -112,13 +117,13 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
             plaw = red_noise_powerlaw(A=pars['A_rn'][ii],
                                       alpha=pars['alpha'][ii],
                                       freqs=freqs)
-            N += corr_from_psd(freqs=freqs, psd=plaw, toas=toas)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=toas, fast=fast)
 
         if A_gwb is not None:
             gwb = red_noise_powerlaw(A=A_gwb,
                                      alpha=-2/3.,
                                      freqs=freqs)
-            N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas, fast=fast)
 
         M = create_design_matrix(toas, **kwastro)
 

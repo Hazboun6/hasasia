@@ -1069,7 +1069,7 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         integrand = np.matmul(tm, np.conjugate(tm.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toas, toas)
+        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
@@ -1110,7 +1110,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         integrand = np.matmul(tmI, np.conjugate(tmJ.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toasI, toasJ,indexing='ij')
+        t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
