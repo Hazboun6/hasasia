@@ -1241,7 +1241,7 @@ def PI_hc(freqs, Tspan, SNR, S_eff, N=200):
 def get_dt(toas):
     '''Returns average dt between observation epochs given toas.'''
     toas = make_quant(toas, u.s)
-    return np.round(np.diff(np.unique(np.round(toas.to('day')))).mean())
+    return np.diff(np.unique(np.round(toas.to('day')))).mean()
 
 def make_quant(param, default_unit):
     """Convenience function to intialize a parameter as an astropy quantity.
