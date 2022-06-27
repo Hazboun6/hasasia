@@ -60,13 +60,13 @@ def R_matrix(designmatrix, N):
     """
     M = designmatrix
     n,m = M.shape
-    L = np.linalg.cholesky(N)
-    Linv = np.linalg.inv(L)
-    U,s,_ = np.linalg.svd(np.matmul(Linv,M), full_matrices=True)
+    L = sl.cholesky(N)
+    Linv = sl.inv(L)
+    U,s,_ = sl.svd(np.matmul(Linv,M), full_matrices=True)
     Id = np.eye(M.shape[0])
     S = np.zeros_like(M)
     S[:m,:m] = np.diag(s)
-    inner = np.linalg.inv(np.matmul(S.T,S))
+    inner = sl.inv(np.matmul(S.T,S))
     outer = np.matmul(S,np.matmul(inner,S.T))
 
     return Id - np.matmul(L,np.matmul(np.matmul(U,outer),np.matmul(U.T,Linv)))
@@ -88,7 +88,7 @@ def G_matrix(designmatrix):
     """
     M = designmatrix
     n , m = M.shape
-    U, _ , _ = np.linalg.svd(M, full_matrices=True)
+    U, _ , _ = sl.svd(M, full_matrices=True)
 
     return U[:,m:]
 
@@ -262,7 +262,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     # N_freq x N_TOA-N_par
 
     Ncal = np.matmul(G.T,np.matmul(psr.N,G)) #N_TOA-N_par x N_TOA-N_par
-    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
+    NcalInv = sl.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
     TfN = np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
     if return_Gtilde_Ncal:
@@ -811,7 +811,7 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
     #                                     toas=p.toas, fast=True) for p in psrs])
     C = C_n + C_h
     Ncal = np.matmul(G.T, np.matmul(C, G)) #N_TOA-N_par x N_TOA-N_par
-    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
+    NcalInv = sl.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
     TfN = NcalInv#np.matmul(G, np.matmul(NcalInv, G.T))
     #np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
