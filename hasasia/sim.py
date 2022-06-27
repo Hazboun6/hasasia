@@ -74,7 +74,7 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
                 'phi', 'theta']
         stop = 5
 
-    haslen = [isinstance(par,(list,np.ndarray)) for par in pars]
+    haslen = [isinstance(par, (list, np.ndarray)) for par in pars]
     if any(haslen):
         L = [len(par) for par, hl in zip(pars, haslen) if hl]
         if not len(set(L))==1:
@@ -89,11 +89,11 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
     pars = [par * np.ones(Npsrs) if not hl else par
             for par, hl in zip(pars[:stop], haslen[:stop])]
     if all(haslen[stop:]):
-        pars.extend([phi,theta])
+        pars.extend([phi, theta])
     else:
         raise ValueError('Must provide sky coordinates for all pulsars.')
 
-    pars = dict(zip(keys,pars))
+    pars = dict(zip(keys, pars))
 
     psrs = []
     err_dim = pars['sigma'].ndim
@@ -108,7 +108,7 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
             toas += np.random.uniform(-dt, dt, size=toas.size)
 
         if err_dim == 2:
-            toaerrs = pars['sigma'][ii,:]
+            toaerrs = pars['sigma'][ii, :]
         else:
             toaerrs = pars['sigma'][ii]*np.ones(Ntoas)
 
