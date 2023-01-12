@@ -61,7 +61,7 @@ PTAs. The Spectrum object has all of the information needed for the pulsar.
 
 .. code-block:: python
 
-  import hasasia.senstivity as hsen
+  import hasasia.sensitivity as hsen
 
   toas = np.arange(54378,59765,22) #Choose a range of times-of-arrival
   toaerrs = 1e-7*np.ones_like(toas) #Set all errors to 100 ns
