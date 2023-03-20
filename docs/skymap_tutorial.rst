@@ -119,18 +119,18 @@ available.
 
 
 One can also access the residual response functions for each of the
-individual pulsars, as ``SkySensitivity.Rplus`` and
-``SkySensitivity.Rcross``.
+individual pulsars, as ``SkySensitivity.Fplus`` and
+``SkySensitivity.Fcross``.
 
 .. code:: python
 
     idx = 0
-    hp.mollview(SM.Rplus[idx], fig=1,
+    hp.mollview(SM.Fplus[idx], fig=1,
                 title="Single Pulsar Response $R^+$",min=-1,max=1)
     hp.visufunc.projscatter(SM.thetas[idx],SM.phis[idx],
                             marker='*',color='white',
                             edgecolors='k',s=200)
-    hp.mollview(SM.Rcross[idx], fig=2,
+    hp.mollview(SM.Fcross[idx], fig=2,
                 title=r"Single Pulsar Response $R^\times$",min=-1,max=1)
     hp.visufunc.projscatter(SM.thetas[idx],SM.phis[idx],
                             marker='*',color='white',
