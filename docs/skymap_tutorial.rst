@@ -237,12 +237,12 @@ integration time provided as the time span of the data set.
 
 .. code:: python
 
-    SNR = SM.SNR(hCirc.value)
+    SNR = SM.SNR(hCirc.value[167])
 
 .. code:: python
 
     idx = 167
-    hp.mollview(SNR,
+    hp.mollview(SNR[idx],
                 title="SNR with Single SMBHB Source",
                 cmap='viridis')
     hp.visufunc.projscatter(SM.thetas,SM.phis,marker='*',
