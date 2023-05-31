@@ -1189,30 +1189,25 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
 
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
 
-def red_noise_realistic_curve(A, freqs, gamma=None, alpha=None):
+def psd_from_holodeck_realization(hc_bg, freqs):
     r"""
-    jeremy
-    Add power law red noise to the prefit residual power spectral density.
-    As :math:`P=A^2(f/fyr)^{-\gamma}`
+    Calculate the power spectral density with given strain and frequency.
 
     Parameters
     ----------
-    A : float
-        Amplitude of red noise.
-
-    gamma : float
-        Spectral index of red noise powerlaw.
+    hc_bg : array
+        characteristic strain of background at each frequency
 
     freqs : array
-        Frequencies at which to calculate the red noise power law.
-    """
-    if gamma is None and alpha is not None:
-        gamma = 3-2*alpha
-    elif ((gamma is None and alpha is None)
-          or (gamma is not None and alpha is not None)):
-        ValueError('Must specify one version of spectral index.')
+        Frequency
 
-    return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
+    Returns
+    -------
+    S_h : array
+        the power spectral density from the background
+    """
+
+    return hc_bg**2 / (12 * np.pi**2 * freqs[:,np.newaxis]**3)
 
 def S_h(A, alpha, freqs):
     r"""
