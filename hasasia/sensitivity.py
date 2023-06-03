@@ -1189,25 +1189,25 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
 
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
 
-def psd_from_holodeck_realization(hc_bg, freqs):
+def psd_from_background_realization(background_hc, freqs):
     r"""
-    Calculate the power spectral density with given strain and frequency.
+    Calculate the power spectral density with given background strain and frequency binning.
 
     Parameters
     ----------
-    hc_bg : array
-        characteristic strain of background at each frequency
+    background_hc : array
+        Characteristic strain (hc) of background at each frequency.
 
     freqs : array
-        Frequency
+        Frequency bins over which the background is stored.
 
     Returns
     -------
     S_h : array
-        the power spectral density from the background
+        the power spectral density of the background
     """
 
-    return hc_bg**2 / (12 * np.pi**2 * freqs[:,np.newaxis]**3)
+    return background_hc**2 / (12 * np.pi**2 * freqs[:,np.newaxis]**3)
 
 def S_h(A, alpha, freqs):
     r"""
