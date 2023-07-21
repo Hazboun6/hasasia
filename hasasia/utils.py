@@ -87,7 +87,7 @@ def pdf_F_signal(F, snr, Npsrs=None):
         N = int(4 * Npsrs)
     return ss.ncx2.pdf(2*F, N, snr**2)
 
-def false_dismissal__prob(F0, snr, Npsrs=None, iota_psi_ave=False):
+def false_dismissal_prob(F0, snr, Npsrs=None, iota_psi_ave=False):
     '''
     False dismissal probability of the F-statistic
     Use None for the Fe statistic and the number of pulsars for the Fp stat.
