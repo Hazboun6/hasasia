@@ -106,7 +106,7 @@ def detection_prob(F0, snr, Npsrs=None, iota_psi_ave=False):
     Detection probability of the F-statistic
     Use None for the Fe and the number of pulsars for the Fp stat.
     '''
-    return 1 - false_dismissal__prob(F0, snr, Npsrs, iota_psi_ave)
+    return 1 - false_dismissal_prob(F0, snr, Npsrs, iota_psi_ave)
 
 def _solve_F_given_fap(fap0=0.003, Npsrs=None):
     return sopt.fsolve(lambda F :fap(F, Npsrs=Npsrs)-fap0, 10)
@@ -114,12 +114,12 @@ def _solve_F_given_fap(fap0=0.003, Npsrs=None):
 def _solve_F_given_fdp_snr(fdp0=0.05, snr=3, Npsrs=None, iota_psi_ave=False):
     Npsrs = 1 if Npsrs is None else Npsrs
     F0 = (4*Npsrs+snr**2)/2
-    return sopt.fsolve(lambda F :false_dismissal__prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, F0)
+    return sopt.fsolve(lambda F :false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, F0)
 
 def _solve_snr_given_fdp_F(fdp0=0.05, F=3, Npsrs=None, iota_psi_ave=False):
     Npsrs = 1 if Npsrs is None else Npsrs
     snr0 = np.sqrt(2*F-4*Npsrs)
-    return sopt.fsolve(lambda snr :false_dismissal__prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, snr0)
+    return sopt.fsolve(lambda snr :false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, snr0)
 
 def _solve_F0_given_SNR(snr=3, Npsrs=None):
     '''
