@@ -11,8 +11,8 @@ day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
 def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
-            A_rn=None, alpha=None, freqs=None, uneven=False, A_gwb=None,
-            fast=True,
+            A_rn=None, alpha=None, freqs=None, uneven=False, 
+            A_gwb=None, alpha_gwb=-2/3., fast=True,
             kwastro={'RADEC':True, 'PROPER':True, 'PX':True}):
     """
     Make a simulated pulsar timing array. Using the available parameters,
@@ -121,7 +121,7 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
 
         if A_gwb is not None:
             gwb = red_noise_powerlaw(A=A_gwb,
-                                     alpha=-2/3.,
+                                     alpha=alpha_gwb,
                                      freqs=freqs)
             N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas, fast=fast)
 
