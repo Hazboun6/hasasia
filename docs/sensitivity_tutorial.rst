@@ -76,7 +76,7 @@ These lists of pulsars are then used to make a set of
 array of frequencies, or alternatively take an array of frequencies,
 over which to calculate the various spectra.
 
-All frequency arras need to match across spectra and red noise
+All frequency arrays need to match across spectra and red noise
 realizations.
 
 .. code:: python
