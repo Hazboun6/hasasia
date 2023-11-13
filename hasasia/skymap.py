@@ -39,7 +39,7 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
 
-    pol: str, optional ['gr','scalar-trans','scalar-long','vector-long']
+    pol: str, optional ['gr', 'scalar-trans', 'scalar-long', 'vector-long']
         Polarization of gravitational waves to be used in pulsar antenna
         patterns. Only one can be used at a time.
     '''
@@ -58,49 +58,49 @@ class SkySensitivity(DeterSensitivityCurve):
         self.K = khat(self.theta_gw, self.phi_gw)
         self.L = lhat(self.theta_gw, self.phi_gw)
         self.M = mhat(self.theta_gw, self.phi_gw)
-        LL = np.einsum('ij, kj->ikj', self.L, self.L)
-        MM = np.einsum('ij, kj->ikj', self.M, self.M)
-        KK = np.einsum('ij, kj->ikj', self.K, self.K)
-        LM = np.einsum('ij, kj->ikj', self.L, self.M)
-        ML = np.einsum('ij, kj->ikj', self.M, self.L)
-        KM = np.einsum('ij, kj->ikj', self.K, self.M)
-        MK = np.einsum('ij, kj->ikj', self.M, self.K)
-        KL = np.einsum('ij, kj->ikj', self.K, self.L)
-        LK = np.einsum('ij, kj->ikj', self.L, self.K)
+        LL = np.einsum('ij, kj ->ikj', self.L, self.L)
+        MM = np.einsum('ij, kj ->ikj', self.M, self.M)
+        KK = np.einsum('ij, kj ->ikj', self.K, self.K)
+        LM = np.einsum('ij, kj ->ikj', self.L, self.M)
+        ML = np.einsum('ij, kj ->ikj', self.M, self.L)
+        KM = np.einsum('ij, kj ->ikj', self.K, self.M)
+        MK = np.einsum('ij, kj ->ikj', self.M, self.K)
+        KL = np.einsum('ij, kj ->ikj', self.K, self.L)
+        LK = np.einsum('ij, kj ->ikj', self.L, self.K)
         self.eplus = MM - LL
         self.ecross = LM + ML
         self.e_b = LL + MM
         self.e_ell = KK # np.sqrt(2)*
         self.e_x = KL + LK
         self.e_y = KM + MK
-        num = 0.5 * np.einsum('ij, kj->ikj', self.pos, self.pos)
-        denom = 1 + np.einsum('ij, il->jl', self.pos, self.K)
+        num = 0.5 * np.einsum('ij, kj ->ikj', self.pos, self.pos)
+        denom = 1 + np.einsum('ij, il ->jl', self.pos, self.K)
 
-        self.D = num[:,:,:,np.newaxis]/denom[np.newaxis, np.newaxis,:,:]
+        self.D = num[:, :, :, np.newaxis]/denom[np.newaxis, np.newaxis, :, :]
         if pulsar_term == 'explicit':
-            Dp = self.pdists[:,np.newaxis] * denom
-            Dp = self.freqs[:,np.newaxis,np.newaxis] * Dp[np.newaxis,:,:]
-            pt = 1-np.exp(-1j*2*np.pi*Dp)
-            pt /= 2*np.pi*1j*self.freqs[:,np.newaxis,np.newaxis]
+            Dp = self.pdists[:, np.newaxis] * denom
+            Dp = self.freqs[:, np.newaxis, np.newaxis] * Dp[np.newaxis, :, :]
+            pt = 1 - np.exp(-1j*2*np.pi * Dp)
+            pt /= 2*np.pi*1j *self.freqs[:, np.newaxis, np.newaxis]
             self.pt_sqr = np.abs(pt)**2
 
         if pol=='gr':
-            self.Fplus = np.einsum('ijkl, ijl ->kl',self.D, self.eplus)
-            self.Fcross = np.einsum('ijkl, ijl ->kl',self.D, self.ecross)
+            self.Fplus = np.einsum('ijkl, ijl ->kl', self.D, self.eplus)
+            self.Fcross = np.einsum('ijkl, ijl ->kl', self.D, self.ecross)
             self.sky_response = self.Fplus**2 + self.Fcross**2
         elif pol=='scalar-trans':
-            self.Fbreathe = np.einsum('ijkl, ijl ->kl',self.D, self.e_b)
+            self.Fbreathe = np.einsum('ijkl, ijl ->kl', self.D, self.e_b)
             self.sky_response = self.Fbreathe**2
         elif pol=='scalar-long':
-            self.Flong = np.einsum('ijkl, ijl ->kl',self.D, self.e_ell)
+            self.Flong = np.einsum('ijkl, ijl ->kl', self.D, self.e_ell)
             self.sky_response = self.Flong**2
         elif pol=='vector-long':
-            self.Fx = np.einsum('ijkl, ijl ->kl',self.D, self.e_x)
-            self.Fy = np.einsum('ijkl, ijl ->kl',self.D, self.e_y)
+            self.Fx = np.einsum('ijkl, ijl ->kl', self.D, self.e_x)
+            self.Fy = np.einsum('ijkl, ijl ->kl', self.D, self.e_y)
             self.sky_response = self.Fx**2 + self.Fy**2
 
         if pulsar_term == 'explicit':
-            self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
+            self.sky_response = (0.5 * self.sky_response[np.newaxis, :, :]
                                  * self.pt_sqr)
 
     def SNR(self, h0, iota=None, psi=None):
@@ -110,7 +110,7 @@ class SkySensitivity(DeterSensitivityCurve):
         `[1]`_.
 
         .. math::
-            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 , \hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
@@ -128,7 +128,7 @@ class SkySensitivity(DeterSensitivityCurve):
         et al., 2019 `[1]`_.
 
         .. math::
-            h_0=\rho(\hat{n})\sqrt{\frac{S_{\rm eff}(f_0 ,\hat{k})}{T_{\rm obs}}}
+            h_0=\rho(\hat{n})\sqrt{\frac{S_{\rm eff}(f_0 , \hat{k})}{T_{\rm obs}}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
 
@@ -171,8 +171,8 @@ class SkySensitivity(DeterSensitivityCurve):
         An array representing the skymap of amplitudes needed to see the
         given signal.
         '''
-        integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
-        return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
+        integrand = h_div_A[:, np.newaxis]**2 / self.S_eff
+        return SNR / np.sqrt(np.trapz(integrand, x=self.freqs, axis=0 ))
 
     def sky_response_full(self, iota, psi):
         r'''
@@ -181,24 +181,24 @@ class SkySensitivity(DeterSensitivityCurve):
         `[1]`_.
 
         .. math::
-            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 , \hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
         Ap_sqr = (0.5 * (1 + np.cos(iota)**2))**2
         Ac_sqr = (np.cos(iota))**2
-        iota = iota if isinstance(iota, (int,float)) else np.array(iota)
-        psi = psi if isinstance(psi, (int,float)) else np.array(psi)
+        iota = iota if isinstance(iota, (int, float)) else np.array(iota)
+        psi = psi if isinstance(psi, (int, float)) else np.array(psi)
         spsi = np.sin(2*np.array(psi))
         cpsi = np.cos(2*np.array(psi))
-        if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
-            c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
-            c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
-            c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
-            term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
-            term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
-            term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
-        elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
+        if isinstance(Ap_sqr, np.ndarray) or isinstance(spsi, np.ndarray):
+            c1 = Ac_sqr[:, np.newaxis]*spsi**2 + Ap_sqr[:, np.newaxis]*cpsi**2
+            c2 = (Ap_sqr[:, np.newaxis] - Ac_sqr[:, np.newaxis]) * cpsi * spsi
+            c3 = Ap_sqr[:, np.newaxis]*spsi**2 + Ac_sqr[:, np.newaxis]*cpsi**2
+            term1 = self.Fplus[:, :, np.newaxis, np.newaxis]**2 * c1
+            term2 = 2 * self.Fplus[:, :, np.newaxis, np.newaxis] * self.Fcross[:, :, np.newaxis, np.newaxis] * c2
+            term3 = self.Fcross[:, :, np.newaxis, np.newaxis]**2 * c3
+        elif isinstance(Ap_sqr, (int, float)) or isinstance(spsi, (int, float)):
             c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
             c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
             c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
@@ -211,19 +211,19 @@ class SkySensitivity(DeterSensitivityCurve):
     def S_SkyI_full(self, iota, psi):
         """Per Pulsar Strain power sensitivity. """
         t_I = self.T_I / self.Tspan
-        RNcalInv = 3.0 * t_I[:,np.newaxis] / self.SnI
+        RNcalInv = 3.0 * t_I[:, np.newaxis] / self.SnI
         if self.pulsar_term == 'explicit':
             raise NotImplementedError('Currently cannot use pulsar term.')
             # RNcalInv /= resid_response(self.freqs)
-            # self._S_SkyI_full = RNcalInv.T[:,:,np.newaxis] * self.sky_response
+            # self._S_SkyI_full = RNcalInv.T[:, :, np.newaxis] * self.sky_response
         else:
             sky_resp = self.sky_response_full(iota, psi)
             if sky_resp.ndim == 2:
-                self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis]
-                                     * sky_resp[np.newaxis,:,:])
+                self._S_SkyI_full = (RNcalInv.T[:, :, np.newaxis]
+                                     * sky_resp[np.newaxis, :, :])
             if sky_resp.ndim == 4:
-                self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis,np.newaxis]
-                                     * sky_resp[np.newaxis,:,:,:,:])
+                self._S_SkyI_full = (RNcalInv.T[:, :, np.newaxis, np.newaxis, np.newaxis]
+                                     * sky_resp[np.newaxis, :, :, :, :])
 
         return self._S_SkyI_full
 
@@ -236,7 +236,7 @@ class SkySensitivity(DeterSensitivityCurve):
             raise NotImplementedError('Currently cannot use pulsar term.')
             # self._S_eff_full = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
         else:
-            # print(self.S_SkyI_full(iota, psi).shape, self.freqs.size,self.pos.size,self.theta_gw.size)
+            # print(self.S_SkyI_full(iota, psi).shape, self.freqs.size, self.pos.size, self.theta_gw.size)
             self._S_eff_full = 1.0 / np.sum(self.S_SkyI_full(iota, psi), axis=1)
 
         return self._S_eff_full
@@ -258,13 +258,13 @@ class SkySensitivity(DeterSensitivityCurve):
         """Per Pulsar Strain power sensitivity. """
         if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
-            RNcalInv = t_I[:,np.newaxis] / self.SnI
+            RNcalInv = t_I[:, np.newaxis] / self.SnI
             if self.pulsar_term == 'explicit':
                 RNcalInv /= resid_response(self.freqs)
-                self._S_SkyI = RNcalInv.T[:,:,np.newaxis] * self.sky_response
+                self._S_SkyI = RNcalInv.T[:, :, np.newaxis] * self.sky_response
             else:
-                self._S_SkyI = (RNcalInv.T[:,:,np.newaxis]
-                                * self.sky_response[np.newaxis,:,:])
+                self._S_SkyI = (RNcalInv.T[:, :, np.newaxis]
+                                * self.sky_response[np.newaxis, :, :])
 
         return self._S_SkyI
 
@@ -276,7 +276,7 @@ class SkySensitivity(DeterSensitivityCurve):
     def h_c(self):
         """Characteristic strain sensitivity"""
         if not hasattr(self, '_h_c'):
-            self._h_c = np.sqrt(self.freqs[:,np.newaxis] * self.S_eff)
+            self._h_c = np.sqrt(self.freqs[:, np.newaxis] * self.S_eff)
         return self._h_c
 
     @property

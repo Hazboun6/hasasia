@@ -12,7 +12,7 @@ import hasasia
 from .utils import create_design_matrix
 
 current_path = os.path.abspath(hasasia.__path__[0])
-sc_dir = os.path.join(current_path,'sensitivity_curves/')
+sc_dir = os.path.join(current_path, 'sensitivity_curves/')
 
 __all__ =['GWBSensitivityCurve',
           'DeterSensitivityCurve',
@@ -59,17 +59,17 @@ def R_matrix(designmatrix, N):
 
     """
     M = designmatrix
-    n,m = M.shape
-    L = np.linalg.cholesky(N)
-    Linv = np.linalg.inv(L)
-    U,s,_ = np.linalg.svd(np.matmul(Linv,M), full_matrices=True)
+    n, m = M.shape
+    L = sl.cholesky(N)
+    Linv = sl.inv(L)
+    U, s, _ = sl.svd(np.matmul(Linv, M), full_matrices=True)
     Id = np.eye(M.shape[0])
     S = np.zeros_like(M)
-    S[:m,:m] = np.diag(s)
-    inner = np.linalg.inv(np.matmul(S.T,S))
-    outer = np.matmul(S,np.matmul(inner,S.T))
+    S[:m, :m] = np.diag(s)
+    inner = sl.inv(np.matmul(S.T, S))
+    outer = np.matmul(S, np.matmul(inner, S.T))
 
-    return Id - np.matmul(L,np.matmul(np.matmul(U,outer),np.matmul(U.T,Linv)))
+    return Id - np.matmul(L, np.matmul(np.matmul(U, outer), np.matmul(U.T, Linv)))
 
 def G_matrix(designmatrix):
     """
@@ -88,9 +88,9 @@ def G_matrix(designmatrix):
     """
     M = designmatrix
     n , m = M.shape
-    U, _ , _ = np.linalg.svd(M, full_matrices=True)
+    U, _ , _ = sl.svd(M, full_matrices=True)
 
-    return U[:,m:]
+    return U[:, m:]
 
 def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
            freqs=None, exact_astro_freqs = False,
@@ -147,15 +147,15 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     tm = np.abs(t1-t2)
 
     # make filter
-    T = toas.max()-toas.min()
-    f0 = 1 / T
+    T = toas.max() - toas.min()
+    f0 = 1/T
     if freqs is None:
         if fmin is None:
             fmin = f0/5
-        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float128')
+        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf, dtype='float128')
         if exact_astro_freqs:
-            ff = np.sort(np.append(ff,[fyr,2*fyr]))
-            nf +=2
+            ff = np.sort(np.append(ff, [fyr, 2*fyr]))
+            nf += 2
     else:
         nf = len(freqs)
         ff = freqs
@@ -167,9 +167,9 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
         else:
             G = Gmatrix
         m = G.shape[1]
-        Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
-        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
-        Tmat = np.matmul(np.conjugate(Gtilde),Gtilde.T)/N_TOA
+        Gtilde = np.zeros((ff.size, G.shape[1]), dtype='complex128')
+        Gtilde = np.dot(np.exp(1j*2*np.pi * ff[:, np.newaxis] * toas), G)
+        Tmat = np.matmul(np.conjugate(Gtilde), Gtilde.T)/N_TOA
         if twofreqs:
             Tmat = np.real(Tmat)
         else:
@@ -177,7 +177,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     else:
         R = R_matrix(M, N)
         for ct, f in enumerate(ff):
-            Tmat[ct] = np.real(np.sum(np.exp(1j*2*np.pi*f*tm)*R)/N_TOA)
+            Tmat[ct] = np.real(np.sum(np.exp(1j*2*np.pi * f * tm) * R) / N_TOA)
 
     return np.real(Tmat), ff, T
 
@@ -232,15 +232,15 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     """
     toas = psr.toas
     # make filter
-    T = toas.max()-toas.min()
-    f0 = 1 / T
+    T = toas.max() - toas.min()
+    f0 = 1/T
     if freqs is None:
         if fmin is None:
             fmin = f0/5
-        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float128')
+        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf, dtype='float128')
         if exact_yr_freqs:
-            ff = np.sort(np.append(ff,[fyr,2*fyr]))
-            nf +=2
+            ff = np.sort(np.append(ff, [fyr, 2*fyr]))
+            nf += 2
     else:
         nf = len(freqs)
         ff = freqs
@@ -253,18 +253,18 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     else:
         G = np.eye(toas.size)
 
-    Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
+    Gtilde = np.zeros((ff.size, G.shape[1]), dtype='complex128')
     #N_freqs x N_TOA-N_par
 
     # Note we do not include factors of NTOA or Timespan as they cancel
     # with the definition of Ncal
-    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
+    Gtilde = np.dot(np.exp(1j*2*np.pi * ff[:, np.newaxis] * toas), G)
     # N_freq x N_TOA-N_par
 
-    Ncal = np.matmul(G.T,np.matmul(psr.N,G)) #N_TOA-N_par x N_TOA-N_par
-    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
+    Ncal = np.matmul(G.T, np.matmul(psr.N, G)) #N_TOA-N_par x N_TOA-N_par
+    NcalInv = sl.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
-    TfN = np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
+    TfN = np.matmul(np.conjugate(Gtilde), np.matmul(NcalInv, Gtilde.T)) / 2
     if return_Gtilde_Ncal:
         return np.real(TfN), Gtilde, Ncal
     elif full_matrix:
@@ -321,7 +321,7 @@ class Pulsar(object):
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
-        self.pdist = make_quant(pdist,'kpc')
+        self.pdist = make_quant(pdist, 'kpc')
 
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
@@ -380,7 +380,7 @@ class Spectrum(object):
         self.tm_fit = tm_fit
         self.Tf_kwargs = Tf_kwargs
         if freqs is None:
-            f0 = 1 / get_Tspan([psr])
+            f0 = 1/get_Tspan([psr])
             if fmin is None:
                 fmin = f0/5
             self.freqs = np.logspace(np.log10(fmin), np.log10(fmax), nf)
@@ -405,17 +405,17 @@ class Spectrum(object):
             #       'Setting psd_prefit to harmonic mean of toaerrs.')
             # sigma = sps.hmean(self.toaerrs)
             # dt = 14*24*3600 # 2 Week Cadence
-            # self.add_white_noise_pow(sigma=sigma,dt=dt)
+            # self.add_white_noise_pow(sigma=sigma, dt=dt)
 
         return self._psd_prefit
 
     @property
     def Tf(self):
         if not hasattr(self, '_Tf'):
-            self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
-                                  toas=self.toas, N=self.N,
-                                  freqs=self.freqs, from_G=True, Gmatrix=self.G,
-                                  **self.Tf_kwargs)
+            self._Tf, _, _ = get_Tf(designmatrix=self.designmatrix,
+                                    toas=self.toas, N=self.N,
+                                    freqs=self.freqs, from_G=True, Gmatrix=self.G,
+                                    **self.Tf_kwargs)
         return self._Tf
 
 
@@ -445,7 +445,7 @@ class Spectrum(object):
         .. _[1]: https://arxiv.org/abs/1907.04341
         """
         if not hasattr(self, '_S_I'):
-            self._S_I = 1/resid_response(self.freqs)/self.NcalInv
+            self._S_I = 1/resid_response(self.freqs) / self.NcalInv
         return self._S_I
 
     @property
@@ -529,12 +529,12 @@ class Spectrum(object):
             to `self.psd_prefit`.
         """
         ff = self.freqs
-        red_noise = A**2*(ff/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
+        red_noise = A**2 * (ff/fyr)**(-gamma) / (12*np.pi**2) * yr_sec**3
         self._psd_prefit += red_noise
         if vals:
             return red_noise
 
-    def add_noise_power(self,noise):
+    def add_noise_power(self, noise):
         r"""Add any spectrum of noise. Must match length of frequency array.
 
         **Note:** All noise information is furnished by the covariance matrix in
@@ -602,7 +602,7 @@ class SensitivityCurve(object):
     def H_0(self):
         """Hubble Constant. Assumed to be in units of km /(s Mpc) unless
         supplied as an `astropy.quantity`. """
-        self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
+        self._H_0 = make_quant(self._H_0, 'km /(s Mpc)')
         return self._H_0
 
 
@@ -619,7 +619,7 @@ class GWBSensitivityCurve(SensitivityCurve):
 
     """
 
-    def __init__(self, spectra, orf='hd',autocorr=False):
+    def __init__(self, spectra, orf='hd', autocorr=False):
 
         super().__init__(spectra)
         if orf == 'hd':
@@ -633,8 +633,8 @@ class GWBSensitivityCurve(SensitivityCurve):
 
         self.ThetaIJ, self.chiIJ, self.pairs, self.chiRSS = Coff
 
-        self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
-                              for ii,jj in zip(self.pairs[0],self.pairs[1])])
+        self.T_IJ = np.array([get_TspanIJ(spectra[ii], spectra[jj])
+                              for ii, jj in zip(self.pairs[0], self.pairs[1])])
 
     def SNR(self, Sh):
         """
@@ -655,8 +655,8 @@ class GWBSensitivityCurve(SensitivityCurve):
             jj = self.pairs[1]
             kk = np.arange(len(self.chiIJ))
             num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]**2
-            series = num[:,np.newaxis] / (self.SnI[ii] * self.SnI[jj])
-            self._S_eff = np.power(np.sum(series, axis=0),-0.5)
+            series = num[:, np.newaxis] / (self.SnI[ii] * self.SnI[jj])
+            self._S_eff = np.power(np.sum(series, axis=0), -0.5)
         return self._S_eff
 
     @property
@@ -668,7 +668,7 @@ class GWBSensitivityCurve(SensitivityCurve):
             kk = np.arange(len(self.chiIJ))
             num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]**2
             self._S_effIJ =  np.sqrt((self.SnI[ii] * self.SnI[jj])
-                                     / num[:,np.newaxis])
+                                     / num[:, np.newaxis])
 
         return self._S_effIJ
 
@@ -689,7 +689,7 @@ class DeterSensitivityCurve(SensitivityCurve):
     def __init__(self, spectra, pulsar_term=True,
                  include_corr=False, A_GWB=None):
         super().__init__(spectra)
-        self.T_I = np.array([sp.toas.max()-sp.toas.min() for sp in spectra])
+        self.T_I = np.array([sp.toas.max() - sp.toas.min() for sp in spectra])
         self.pulsar_term = pulsar_term
         self.include_corr = include_corr
         if include_corr:
@@ -700,8 +700,8 @@ class DeterSensitivityCurve(SensitivityCurve):
                 self.A_GWB = A_GWB
             Coff = HellingsDownsCoeff(self.phis, self.thetas)
             self.ThetaIJ, self.chiIJ, self.pairs, self.chiRSS = Coff
-            self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
-                                  for ii,jj in zip(self.pairs[0],
+            self.T_IJ = np.array([get_TspanIJ(spectra[ii], spectra[jj])
+                                  for ii, jj in zip(self.pairs[0],
                                                    self.pairs[1])])
             self.NcalInvI = np.array([sp.NcalInv for sp in spectra])
 
@@ -712,7 +712,7 @@ class DeterSensitivityCurve(SensitivityCurve):
         `[1]`_.
 
         .. math::
-            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 , \hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
@@ -723,7 +723,7 @@ class DeterSensitivityCurve(SensitivityCurve):
         """Strain power sensitivity. """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
-            elements = t_I[:,np.newaxis] / self.SnI
+            elements = t_I[:, np.newaxis] / self.SnI
             sum1 = np.sum(elements, axis=0)
             if self.include_corr:
                 sum = 0
@@ -731,11 +731,11 @@ class DeterSensitivityCurve(SensitivityCurve):
                 jj = self.pairs[1]
                 kk = np.arange(len(self.chiIJ))
                 num = self.T_IJ[kk] / self.Tspan * self.chiIJ[kk]
-                summand = num[:,np.newaxis] * self.NcalInvIJ
-                summand *= resid_response(self.freqs)[np.newaxis,:]
+                summand = num[:, np.newaxis] * self.NcalInvIJ
+                summand *= resid_response(self.freqs)[np.newaxis, :]
                 sum2 = np.sum(summand, axis=0)
             norm = 4./5 if self.pulsar_term else 2./5
-            self._S_eff = np.power(norm * sum1,-1)
+            self._S_eff = np.power(norm * sum1, -1)
         return self._S_eff
 
     @property
@@ -744,7 +744,7 @@ class DeterSensitivityCurve(SensitivityCurve):
         Inverse Noise Weighted Transmission Function that includes
         cross-correlation noise from GWB.
         """
-        if not hasattr(self,'_NcalInvIJ'):
+        if not hasattr(self, '_NcalInvIJ'):
             self._NcalInvIJ = get_NcalInvIJ(psrs=self.spectra,
                                             A_GWB=self.A_GWB,
                                             freqs=self.freqs,
@@ -753,8 +753,8 @@ class DeterSensitivityCurve(SensitivityCurve):
         return self._NcalInvIJ
 
 
-def HD(phis,thetas):
-    return HellingsDownsCoeff(np.array(phis),np.array(thetas))[1][0]
+def HD(phis, thetas):
+    return HellingsDownsCoeff(np.array(phis), np.array(thetas))[1][0]
 
 
 def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
@@ -790,15 +790,15 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
     Gtilde = np.zeros((ff.size, G.shape[1]), dtype='complex128')
     #N_freqs x N_TOA-N_par
 
-    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
+    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:, np.newaxis]*toas), G)
     # N_freq x N_TOA-N_par
     #CHANGE BACK
     # psd = red_noise_powerlaw(A=A_GWB, gamma=13./3, freqs=freqs)
     psd = 2*(365.25*24*3600/40)*(1e-6)**2
-    Ch_blocks = [[(HD([pc.phi,pr.phi],[pc.theta,pr.theta])
-                   *corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
-                                    toasJ=pr.toas, fast=True))
-                  if r!=c
+    Ch_blocks = [[(HD([pc.phi, pr.phi], [pc.theta, pr.theta])
+                   * corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
+                                     toasJ=pr.toas, fast=True))
+                  if r != c
                   else corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
                                        toasJ=pr.toas, fast=True)
                   for r, pr in enumerate(psrs)]
@@ -811,10 +811,10 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
     #                                     toas=p.toas, fast=True) for p in psrs])
     C = C_n + C_h
     Ncal = np.matmul(G.T, np.matmul(C, G)) #N_TOA-N_par x N_TOA-N_par
-    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
+    NcalInv = sl.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
     TfN = NcalInv#np.matmul(G, np.matmul(NcalInv, G.T))
-    #np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
+    #np.matmul(np.conjugate(Gtilde), np.matmul(NcalInv, Gtilde.T)) / 2
 
     if return_Gtilde_Ncal:
         return np.real(TfN), Gtilde, Ncal
@@ -858,22 +858,22 @@ def HellingsDownsCoeff(phi, theta, autocorr=False):
     Npsrs = len(phi)
     # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
     psr_idx = np.arange(Npsrs)
-    pairs = list(it.combinations(psr_idx,2))
+    pairs = list(it.combinations(psr_idx, 2))
     first, second = list(map(list, zip(*pairs)))
-    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
-                    + np.sin(theta[first]) * np.sin(theta[second]) \
-                    * np.cos(phi[first] - phi[second])
+    cosThetaIJ = (np.cos(theta[first]) * np.cos(theta[second])
+                  + np.sin(theta[first]) * np.sin(theta[second])
+                  * np.cos(phi[first] - phi[second]))
     if autocorr:
         first.extend(psr_idx)
         second.extend(psr_idx)
-        cosThetaIJ = np.append(cosThetaIJ,np.zeros(Npsrs))
+        cosThetaIJ = np.append(cosThetaIJ, np.zeros(Npsrs))
     X = (1. - cosThetaIJ) / 2.
     chiIJ = [1.5*x*np.log(x) - 0.25*x + 0.5 if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
     chiRSS = np.sqrt(np.sum(chiIJ**2))
-    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first, second]), chiRSS
 
 def ScalarTensorCoeff(phi, theta, norm='std'):
     """
@@ -910,18 +910,18 @@ def ScalarTensorCoeff(phi, theta, norm='std'):
     Npsrs = len(phi)
     # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
     psr_idx = np.arange(Npsrs)
-    pairs = list(it.combinations(psr_idx,2))
+    pairs = list(it.combinations(psr_idx, 2))
     first, second = list(map(list, zip(*pairs)))
-    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
-                    + np.sin(theta[first]) * np.sin(theta[second]) \
-                    * np.cos(phi[first] - phi[second])
-    X = 3/8+1/8*cosThetaIJ
+    cosThetaIJ = (np.cos(theta[first]) * np.cos(theta[second])
+                  + np.sin(theta[first]) * np.sin(theta[second])
+                  * np.cos(phi[first] - phi[second]))
+    X = 3/8 + 1/8 * cosThetaIJ
     chiIJ = [x if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
     chiRSS = np.sqrt(np.sum(chiIJ**2))
-    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first, second]), chiRSS
 
 def DipoleCoeff(phi, theta, norm='std'):
     """
@@ -958,18 +958,18 @@ def DipoleCoeff(phi, theta, norm='std'):
     Npsrs = len(phi)
     # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
     psr_idx = np.arange(Npsrs)
-    pairs = list(it.combinations(psr_idx,2))
+    pairs = list(it.combinations(psr_idx, 2))
     first, second = list(map(list, zip(*pairs)))
-    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
-                    + np.sin(theta[first]) * np.sin(theta[second]) \
-                    * np.cos(phi[first] - phi[second])
+    cosThetaIJ = (np.cos(theta[first]) * np.cos(theta[second])
+                  + np.sin(theta[first]) * np.sin(theta[second])
+                  * np.cos(phi[first] - phi[second]))
     X = 0.5*cosThetaIJ
     chiIJ = [x if x!=0 else 1. for x in X]
     chiIJ = np.array(chiIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
     chiRSS = np.sqrt(np.sum(chiIJ**2))
-    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first, second]), chiRSS
 
 def MonopoleCoeff(phi, theta, norm='std'):
     """
@@ -1006,16 +1006,16 @@ def MonopoleCoeff(phi, theta, norm='std'):
     Npsrs = len(phi)
     # Npairs = np.int(Npsrs * (Npsrs-1) / 2.)
     psr_idx = np.arange(Npsrs)
-    pairs = list(it.combinations(psr_idx,2))
+    pairs = list(it.combinations(psr_idx, 2))
     first, second = list(map(list, zip(*pairs)))
-    cosThetaIJ = np.cos(theta[first]) * np.cos(theta[second]) \
-                    + np.sin(theta[first]) * np.sin(theta[second]) \
-                    * np.cos(phi[first] - phi[second])
+    cosThetaIJ = (np.cos(theta[first]) * np.cos(theta[second])
+                  + np.sin(theta[first]) * np.sin(theta[second])
+                  * np.cos(phi[first] - phi[second]))
     chiIJ = np.ones_like(cosThetaIJ)
 
     # calculate rss (root-sum-squared) of Hellings-Downs factor
     chiRSS = np.sqrt(np.sum(chiIJ**2))
-    return np.arccos(cosThetaIJ), chiIJ, np.array([first,second]), chiRSS
+    return np.arccos(cosThetaIJ), chiIJ, np.array([first, second]), chiRSS
 
 
 def get_Tspan(psrs):
@@ -1026,12 +1026,12 @@ def get_Tspan(psrs):
     first = np.amin([p.toas.min() for p in psrs])
     return last - first
 
-def get_TspanIJ(psr1,psr2):
+def get_TspanIJ(psr1, psr2):
     """
     Returns the overlapping timespan of two Pulsar objects, psr1/psr2.
     """
-    start = np.amax([psr1.toas.min(),psr2.toas.min()])
-    stop = np.amin([psr1.toas.max(),psr2.toas.max()])
+    start = np.amax([psr1.toas.min(), psr2.toas.min()])
+    stop = np.amin([psr1.toas.max(), psr2.toas.max()])
     return stop - start
 
 def corr_from_psd(freqs, psd, toas, fast=True):
@@ -1064,15 +1064,15 @@ def corr_from_psd(freqs, psd, toas, fast=True):
     """
     if fast:
         df = np.diff(freqs)
-        df = np.append(df,df[-1])
-        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+        df = np.append(df, df[-1])
+        tm = np.sqrt(psd*df) * np.exp(1j*2*np.pi * freqs * toas[:, np.newaxis])
         integrand = np.matmul(tm, np.conjugate(tm.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
         t1, t2 = np.meshgrid(toas, toas, indexing='ij')
         tm = np.abs(t1-t2)
-        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+        integrand = psd * np.cos(2*np.pi * freqs * tm[:, :, np.newaxis])#df*
+        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand, axis=2)#
 
 def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
     """
@@ -1104,15 +1104,15 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
     """
     if fast:
         df = np.diff(freqs)
-        df = np.append(df,df[-1])
-        tmI = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toasI[:,np.newaxis])
-        tmJ = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toasJ[:,np.newaxis])
+        df = np.append(df, df[-1])
+        tmI = np.sqrt(psd*df) * np.exp(1j*2*np.pi * freqs * toasI[:, np.newaxis])
+        tmJ = np.sqrt(psd*df) * np.exp(1j*2*np.pi * freqs * toasJ[:, np.newaxis])
         integrand = np.matmul(tmI, np.conjugate(tmJ.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
         t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
-        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        integrand = psd * np.cos(2*np.pi * freqs * tm[:, :, np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
@@ -1148,14 +1148,14 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
             bucket_ref.append(toas[i])
             bucket_ind.append([i])
 
-    avetoas = np.array([np.mean(toas[l]) for l in bucket_ind],'d')
-    avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind],'d')
+    avetoas = np.array([np.mean(toas[l]) for l in bucket_ind], 'd')
+    avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind], 'd')
     if flags is not None:
         aveflags = np.array([flags[l[0]] for l in bucket_ind])
 
-    U = np.zeros((len(toas),len(bucket_ind)),'d')
-    for i,l in enumerate(bucket_ind):
-        U[l,i] = 1
+    U = np.zeros((len(toas), len(bucket_ind)), 'd')
+    for i, l in enumerate(bucket_ind):
+        U[l, i] = 1
 
     if flags is not None:
         return avetoas, avetoaerrs, aveflags, U, bucket_ind
@@ -1182,7 +1182,7 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
         Frequencies at which to calculate the red noise power law.
     """
     if gamma is None and alpha is not None:
-        gamma = 3-2*alpha
+        gamma = 3 - 2*alpha
     elif ((gamma is None and alpha is None)
           or (gamma is not None and alpha is not None)):
         ValueError('Must specify one version of spectral index.')
@@ -1217,23 +1217,23 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
     else:
         pass
 
-    if hasattr(alpha,'size'):
+    if hasattr(alpha, 'size'):
         fS_sqr = freqs**2 * S_eff**2
-        integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
-        integrand /= fS_sqr[:,np.newaxis]
-        fintegral = np.trapz(integrand, x=freqs,axis=0)
+        integrand = (freqs[:, np.newaxis]/fyr)**(4*alpha)
+        integrand /= fS_sqr[:, np.newaxis]
+        fintegral = np.trapz(integrand, x=freqs, axis=0)
     else:
         integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
         fintegral = np.trapz(integrand, x=freqs)
 
-    return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
+    return np.sqrt(SNR) / np.power(2 * Tspan * fintegral, 1/4.)
 
 def PI_hc(freqs, Tspan, SNR, S_eff, N=200):
     '''Power law-integrated characteristic strain.'''
     alpha = np.linspace(-1.75, 1.25, N)
     h = Agwb_from_Seff_plaw(freqs=freqs, Tspan=Tspan, SNR=SNR,
                             S_eff=S_eff, alpha=alpha)
-    plaw = np.dot((freqs[:,np.newaxis]/fyr)**alpha,h[:,np.newaxis]*np.eye(N))
+    plaw = np.dot((freqs[:, np.newaxis]/fyr)**alpha, h[:, np.newaxis]*np.eye(N))
     PI_sensitivity = np.amax(plaw, axis=1)
 
     return PI_sensitivity, plaw
@@ -1253,7 +1253,7 @@ def make_quant(param, default_unit):
         an astropy quantity
 
     example:
-        self.f0 = make_quant(f0,'MHz')
+        self.f0 = make_quant(f0, 'MHz')
     """
     default_unit = u.core.Unit(default_unit)
     if hasattr(param, 'unit'):
