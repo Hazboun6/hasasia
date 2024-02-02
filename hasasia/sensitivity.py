@@ -335,13 +335,12 @@ class Pulsar(object):
         else:
             self.designmatrix = designmatrix
 
-    def filter_data(self, start_time=1, end_time=None):
+    def filter_data(self, start_time=None, end_time=None):
         """
         Parameters
         ==========
         start_time - float
             MJD at which to begin data subset.
-            Defaults to 1 MJD.
         end_time - float
             MJD at which to end data subset.
 
@@ -349,16 +348,19 @@ class Pulsar(object):
         Function adapted from enterprise.BasePulsar() class.
         """
         if start_time is None and end_time is None:
-            mask = np.ones(self._toas.shape, dtype=bool)
+            mask = np.ones(self.toas.shape, dtype=bool)
         else:
-            mask = np.logical_and(self._toas >= start_time * 86400, self._toas <= end_time * 86400)
+            mask = np.logical_and(self.toas >= start_time * 86400, self.toas <= end_time * 86400)
 
-        self._toas = self._toas[mask]
-        self._toaerrs = self._toaerrs[mask]
+        self.toas = self.toas[mask]
+        self.toaerrs = self.toaerrs[mask]
 
-        self._designmatrix = self._designmatrix[mask, :]
-        dmx_mask = np.sum(self._designmatrix, axis=0) != 0.0
-        self._designmatrix = self._designmatrix[:, dmx_mask]
+        self.designmatrix = self.designmatrix[mask, :]
+        #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
+        #self.designmatrix = self.designmatrix[:, dmx_mask]
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        print("dim designmatrix = ", self.designmatrix.shape)
+        print("dim G matrxi = ", self.G.shape)
     
     @property
     def G(self):
