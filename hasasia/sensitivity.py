@@ -315,12 +315,13 @@ class Pulsar(object):
         Earth-pulsar distance. Default units is kpc.
 
     """
-    def __init__(self, toas, toaerrs, phi=None, theta=None,
+    def __init__(self, toas, toaerrs, phi=None, theta=None, name=None,
                  designmatrix=None, N=None, pdist=1.0*u.kpc):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
+        self.name = name
         self.pdist = make_quant(pdist,'kpc')
 
         if N is None:
@@ -334,6 +335,33 @@ class Pulsar(object):
         else:
             self.designmatrix = designmatrix
 
+    def filter_data(self, start_time=None, end_time=None):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin data subset.
+        end_time - float
+            MJD at which to end data subset.
+
+        Filter data to create a time-slice of overall dataset.
+        Function adapted from enterprise.BasePulsar() class.
+        """
+        if start_time is None and end_time is None:
+            mask = np.ones(self.toas.shape, dtype=bool)
+        else:
+            mask = np.logical_and(self.toas >= start_time * 86400, self.toas <= end_time * 86400)
+
+        self.toas = self.toas[mask]
+        self.toaerrs = self.toaerrs[mask]
+
+        self.designmatrix = self.designmatrix[mask, :]
+        #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
+        #self.designmatrix = self.designmatrix[:, dmx_mask]
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        print("dim designmatrix = ", self.designmatrix.shape)
+        print("dim G matrxi = ", self.G.shape)
+    
     @property
     def G(self):
         """Inverse Noise Weighted Transmission Function."""
@@ -1188,6 +1216,26 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
         ValueError('Must specify one version of spectral index.')
 
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
+
+def psd_from_background_realization(background_hc, freqs):
+    r"""
+    Calculate the power spectral density with given background strain and frequency binning.
+
+    Parameters
+    ----------
+    background_hc : array
+        Characteristic strain (hc) of background at each frequency.
+
+    freqs : array
+        Frequency bins over which the background is stored.
+
+    Returns
+    -------
+    S_h : array
+        the power spectral density of the background
+    """
+
+    return background_hc**2 / (12 * np.pi**2 * freqs[:,np.newaxis]**3)
 
 def S_h(A, alpha, freqs):
     r"""
