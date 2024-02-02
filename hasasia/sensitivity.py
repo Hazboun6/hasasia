@@ -315,12 +315,13 @@ class Pulsar(object):
         Earth-pulsar distance. Default units is kpc.
 
     """
-    def __init__(self, toas, toaerrs, phi=None, theta=None,
+    def __init__(self, toas, toaerrs, phi=None, theta=None, name=None,
                  designmatrix=None, N=None, pdist=1.0*u.kpc):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
+        self.name = name
         self.pdist = make_quant(pdist,'kpc')
 
         if N is None:
