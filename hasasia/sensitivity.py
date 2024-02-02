@@ -335,6 +335,31 @@ class Pulsar(object):
         else:
             self.designmatrix = designmatrix
 
+    def filter_data(self, start_time=1, end_time=None):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin data subset.
+            Defaults to 1 MJD.
+        end_time - float
+            MJD at which to end data subset.
+
+        Filter data to create a time-slice of overall dataset.
+        Function adapted from enterprise.BasePulsar() class.
+        """
+        if start_time is None and end_time is None:
+            mask = np.ones(self._toas.shape, dtype=bool)
+        else:
+            mask = np.logical_and(self._toas >= start_time * 86400, self._toas <= end_time * 86400)
+
+        self._toas = self._toas[mask]
+        self._toaerrs = self._toaerrs[mask]
+
+        self._designmatrix = self._designmatrix[mask, :]
+        dmx_mask = np.sum(self._designmatrix, axis=0) != 0.0
+        self._designmatrix = self._designmatrix[:, dmx_mask]
+    
     @property
     def G(self):
         """Inverse Noise Weighted Transmission Function."""
