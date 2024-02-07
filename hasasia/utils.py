@@ -5,6 +5,8 @@ import scipy.optimize as sopt
 import scipy.special as ssp
 import scipy.integrate as si
 import scipy.stats as ss
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 
 __all__ = ['create_design_matrix',
            'fap',
@@ -128,3 +130,50 @@ def _solve_F0_given_SNR(snr=3, Npsrs=None):
     '''
     Npsrs = 1 if Npsrs is None else Npsrs 
     return 0.5*(4.*Npsrs+snr**2.)
+
+def theta_phi_to_SkyCoord(theta, phi):
+    """
+    Parameters
+    ==========
+    phi : float, array of floats
+        The celestial longitude in solar system coordinates.
+    theta : float, array of floats
+        The celestial lattitude in solar system coordinates.
+    
+    Returns
+    =======
+    skycoord - astropy.SkyCoord object
+        Can use this to convert to ra, dec, etc.
+        (e.g. SkyCoord.ra.deg)
+
+    Converts an inputed longitude and lattitude into an `astropy.SkyCoord` object.
+
+    """
+
+    return SkyCoord(phi*u.rad, ( theta - np.pi/2 )*u.rad)
+
+def skycoord_to_Jname(skycoord):
+    """
+    Parameters
+    ==========
+    skycoord - astropy.SkyCoord object
+        Can use `theta_phi_to_SkyCoord()` to get this.
+    
+    Returns
+    =======
+    Jname - string, array of strings
+        The traditional Jname of a pulsar with given coordinates
+        (eg. 'J1713+0747')
+    
+    """
+    coord_pieces = [
+            str(skycoord.ra.hms[0]).split('.')[0], 
+            str(skycoord.ra.hms[1]).split('.')[0], 
+            str(abs(skycoord.dec.hms[0])).split('.')[0], 
+            str(abs(skycoord.dec.hms[1])).split('.')[0]
+            ]
+    sign = ['-','+'][int(skycoord.dec.hms[0]>0)]
+    for i, piece in enumerate(coord_pieces):
+        if len(str(abs(int(piece)))) < 2:
+            coord_pieces[i] = '0' + str(piece)
+    return 'J' + coord_pieces[0] + coord_pieces[1] + sign + coord_pieces[2] +coord_pieces[3]

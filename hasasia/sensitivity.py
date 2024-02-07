@@ -354,13 +354,15 @@ class Pulsar(object):
 
         self.toas = self.toas[mask]
         self.toaerrs = self.toaerrs[mask]
+        self.N = self.N[mask, :][:, mask]
 
-        self.designmatrix = self.designmatrix[mask, :]
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        #self.designmatrix = self.designmatrix[mask, :]
         #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
         #self.designmatrix = self.designmatrix[:, dmx_mask]
         self._G = G_matrix(designmatrix=self.designmatrix)
-        print("dim designmatrix = ", self.designmatrix.shape)
-        print("dim G matrxi = ", self.G.shape)
+        #print("dim designmatrix = ", self.designmatrix.shape)
+        #print("dim G matrxi = ", self.G.shape)
     
     @property
     def G(self):
@@ -1050,9 +1052,13 @@ def get_Tspan(psrs):
     """
     Returns the total timespan from a list or arry of Pulsar objects, psrs.
     """
-    last = np.amax([p.toas.max() for p in psrs])
-    first = np.amin([p.toas.min() for p in psrs])
-    return last - first
+    try:
+        last = np.amax([p.toas.max() for p in psrs])
+        first = np.amin([p.toas.min() for p in psrs])
+        tspan = last-first
+    except ValueError:
+        tspan = 0
+    return tspan
 
 def get_TspanIJ(psr1,psr2):
     """

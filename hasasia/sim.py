@@ -11,8 +11,8 @@ day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
 def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
-            A_rn=None, alpha=None, freqs=None, uneven=False, A_gwb=None,
-            fast=True,
+            A_rn=None, alpha=None, freqs=None, uneven=False,
+            A_gwb=None, gamma_gwb = 13/3, fast=True, psr_names = None,
             kwastro={'RADEC':True, 'PROPER':True, 'PX':True}):
     """
     Make a simulated pulsar timing array. Using the available parameters,
@@ -98,6 +98,8 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
     psrs = []
     err_dim = pars['sigma'].ndim
     Timespan = np.amax(pars['timespan'])
+    if psr_names is None:
+        psr_names = [None for _ in range(Npsrs)]
     for ii in range(Npsrs):
         tspan = pars['timespan'][ii]
         Ntoas = int(np.floor(tspan*pars['cad'][ii]))
@@ -121,13 +123,13 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
 
         if A_gwb is not None:
             gwb = red_noise_powerlaw(A=A_gwb,
-                                     alpha=-2/3.,
+                                     alpha=gamma_gwb,
                                      freqs=freqs)
             N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas, fast=fast)
 
         M = create_design_matrix(toas, **kwastro)
 
-        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii],
+        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii], name=psr_names[ii],
                    theta=pars['theta'][ii], designmatrix=M, N=N)
         psrs.append(p)
 
