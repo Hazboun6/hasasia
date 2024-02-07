@@ -363,6 +363,45 @@ class Pulsar(object):
         self._G = G_matrix(designmatrix=self.designmatrix)
         #print("dim designmatrix = ", self.designmatrix.shape)
         #print("dim G matrxi = ", self.G.shape)
+
+    def change_cadence(self, start_time=None, end_time=None,
+                       cadence=2):
+        """
+        *****************
+        WORK IN PROGRESSS
+        *****************
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin altared cadence.
+        end_time - float
+            MJD at which to end altared cadence.
+        cadence - float
+            factor by which to change the observing cadence.
+        
+
+        Change observing cadence in a given time range.
+        Recalculate pulsar properties.
+        """
+        if start_time is None and end_time is None:
+            mask = np.ones(self.toas.shape, dtype=bool)
+        else:
+            mask = np.logical_and(self.toas >= start_time * 86400, self.toas <= end_time * 86400)
+        # change cadence by changing number of toas
+        self.toas = self.toas[mask]
+        self.toaerrs = self.toaerrs[mask]
+        
+
+
+        self.N = self.N[mask, :][:, mask]
+
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        #self.designmatrix = self.designmatrix[mask, :]
+        #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
+        #self.designmatrix = self.designmatrix[:, dmx_mask]
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        #print("dim designmatrix = ", self.designmatrix.shape)
+        #print("dim G matrxi = ", self.G.shape)
     
     @property
     def G(self):
