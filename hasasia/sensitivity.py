@@ -316,13 +316,16 @@ class Pulsar(object):
 
     """
     def __init__(self, toas, toaerrs, phi=None, theta=None, name=None,
-                 designmatrix=None, N=None, pdist=1.0*u.kpc):
+                 designmatrix=None, N=None, pdist=1.0*u.kpc, A_rn=None,
+                 alpha=None,):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
         self.name = name
         self.pdist = make_quant(pdist,'kpc')
+        self.A_rn = A_rn
+        self.alpha = alpha
 
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
@@ -364,8 +367,10 @@ class Pulsar(object):
         #print("dim designmatrix = ", self.designmatrix.shape)
         #print("dim G matrxi = ", self.G.shape)
 
-    def change_cadence(self, start_time=None, end_time=None,
-                       cadence=2):
+    def change_cadence(self, start_time=0, end_time=1_000_000,
+                       cadence=None, cadence_factor=2, uneven=False, 
+                       A_gwb=None, gamma_gwb=13/3., freqs=None,
+                       fast=True,):
         """
         *****************
         WORK IN PROGRESSS
@@ -383,25 +388,53 @@ class Pulsar(object):
         Change observing cadence in a given time range.
         Recalculate pulsar properties.
         """
-        if start_time is None and end_time is None:
-            mask = np.ones(self.toas.shape, dtype=bool)
+        mask_before = self.toas <= start_time * 86400
+        mask_after = self.toas >= end_time * 86400
+        old_Ntoas = np.sum(
+                    np.logical_and(self.toas >= start_time * 86400,
+                                    self.toas <= end_time * 86400)
+                )
+        # store the old toas and errors
+        old_toas = self.toas
+        old_toaerrs = self.toaerrs
+        # calculate old cadence then modified cadence
+        if start_time < min(old_toas)/84600:
+            start_time = min(old_toas)/84600
+        if end_time < min(old_toas)/84600:
+            print("trying to change non-existant campaign")
+            return 0
+        duration = end_time - start_time # in MJD
+        old_cadence = old_Ntoas / duration * 365.25 # cad is Ntoas/year
+        if cadence is not None:
+            new_cadence = cadence
         else:
-            mask = np.logical_and(self.toas >= start_time * 86400, self.toas <= end_time * 86400)
-        # change cadence by changing number of toas
-        self.toas = self.toas[mask]
-        self.toaerrs = self.toaerrs[mask]
-        
+            new_cadence = old_cadence * cadence_factor
+        # create new toas and toa errors
+        campaign_Ntoas = int(np.floor( duration / 365.25 * new_cadence ))
+        campaign_toas = np.linspace(start_time, end_time, campaign_Ntoas) * 86400
+        print(duration, old_Ntoas, new_cadence, campaign_Ntoas, len(campaign_toas))
+        if uneven:
+            dt = duration / campaign_Ntoas / 4 * yr_sec
+            campaign_toas += np.random.uniform(-dt, dt, size=campaign_Ntoas)
+        self.toas = np.concatenate([old_toas[mask_before], campaign_toas, old_toas[mask_after]])
+        campaign_toaerrs = np.mean(old_toaerrs)*np.ones(campaign_Ntoas)
+        self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
+        # recalculate N, designmatrix, G, 
+        N = np.diag(self.toaerrs**2)
+        if self.A_rn is not None:
+            plaw = red_noise_powerlaw(A=10**self.A_rn,
+                                      alpha=self.alpha,
+                                      freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=self.toas, fast=fast)
 
-
-        self.N = self.N[mask, :][:, mask]
-
+        if A_gwb is not None:
+            gwb = red_noise_powerlaw(A=A_gwb,
+                                     alpha=gamma_gwb,
+                                     freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=self.toas, fast=fast)
         self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
-        #self.designmatrix = self.designmatrix[mask, :]
-        #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
-        #self.designmatrix = self.designmatrix[:, dmx_mask]
         self._G = G_matrix(designmatrix=self.designmatrix)
-        #print("dim designmatrix = ", self.designmatrix.shape)
-        #print("dim G matrxi = ", self.G.shape)
+        self.N = N
     
     @property
     def G(self):

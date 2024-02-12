@@ -128,9 +128,17 @@ def sim_pta(timespan, cad, sigma, phi, theta, Npsrs=None,
             N += corr_from_psd(freqs=freqs, psd=gwb, toas=toas, fast=fast)
 
         M = create_design_matrix(toas, **kwastro)
-
-        p = Pulsar(toas, toaerrs, phi=pars['phi'][ii], name=psr_names[ii],
-                   theta=pars['theta'][ii], designmatrix=M, N=N)
+        # FIXME to always loop over A_rn
+        if 'A_rn' in keys:
+            A_rn = pars['A_rn'][ii]
+            alpha = pars['alpha'][ii] 
+        else: 
+            A_rn = None
+        
+        p = Pulsar(toas, toaerrs, name=psr_names[ii],
+                   phi=pars['phi'][ii], theta=pars['theta'][ii], 
+                   A_rn=A_rn, alpha=alpha,
+                   designmatrix=M, N=N)
         psrs.append(p)
 
     return psrs
