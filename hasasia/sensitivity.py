@@ -412,14 +412,15 @@ class Pulsar(object):
         # create new toas and toa errors
         campaign_Ntoas = int(np.floor( duration / 365.25 * new_cadence ))
         campaign_toas = np.linspace(start_time, end_time, campaign_Ntoas) * 86400
-        print(duration, old_Ntoas, new_cadence, campaign_Ntoas, len(campaign_toas))
         if uneven:
-            dt = duration / campaign_Ntoas / 4 * yr_sec
+            # FIXME check this with jeff to see what he was going for
+            # in sim_pta()
+            dt = duration / campaign_Ntoas / 8 * yr_sec
             campaign_toas += np.random.uniform(-dt, dt, size=campaign_Ntoas)
         self.toas = np.concatenate([old_toas[mask_before], campaign_toas, old_toas[mask_after]])
         campaign_toaerrs = np.mean(old_toaerrs)*np.ones(campaign_Ntoas)
         self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
-        # recalculate N, designmatrix, G, 
+        # recalculate N, designmatrix, G with new toas
         N = np.diag(self.toaerrs**2)
         if self.A_rn is not None:
             plaw = red_noise_powerlaw(A=10**self.A_rn,
