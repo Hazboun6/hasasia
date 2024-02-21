@@ -1,6 +1,15 @@
 =======
 History
 =======
+1.2.3 (2021-09-14)
+Remove pytest-runner from setup.py
+
+1.2.2 (2021-09-14)
+Check Build status
+
+1.2.1 (2021-09-14)
+Fix auto deploy.
+
 1.2.0 (2021-09-14)
 Added new single source functionality to SkyMap.
 
@@ -46,6 +55,6 @@ The Official Release.
 0.1.1 (2019-06-23)
 
 0.1.0 (2019-06-23)*
-------------------
+-------------------
 
 * First release on PyPI.

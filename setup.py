@@ -15,10 +15,6 @@ requirements = ['numpy',
                 'scipy',
                 'astropy',]
 
-setup_requirements = ['pytest-runner', ]
-
-test_requirements = ['pytest', ]
-
 setup(
     author="Jeffrey S. Hazboun",
     author_email='jeffrey.hazboun@gmail.com',
@@ -37,6 +33,7 @@ setup(
     install_requires=requirements,
     license="MIT license",
     long_description=readme + '\n\n' + history,
+    long_description_content_type='text/x-rst',
     include_package_data=True,
     keywords='hasasia',
     name='hasasia',
@@ -44,10 +41,8 @@ setup(
     package_data={'hasasia.sensitivity_curves':
                   ['nanograv_11yr_deter.sc',
                    'nanograv_11yr_stoch.sc']},
-    setup_requires=setup_requirements,
     test_suite='tests',
-    tests_require=test_requirements,
     url='https://github.com/Hazboun6/hasasia',
-    version='1.2.0',
+    version='1.2.3',
     zip_safe=False,
 )

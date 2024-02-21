@@ -27,6 +27,7 @@ __all__ =['GWBSensitivityCurve',
           'get_Tspan',
           'get_TspanIJ',
           'corr_from_psd',
+          'corr_from_psd_chrom',
           'quantize_fast',
           'red_noise_powerlaw',
           'Agwb_from_Seff_plaw',
@@ -93,7 +94,8 @@ def G_matrix(designmatrix):
     return U[:,m:]
 
 def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
-           freqs=None, exact_astro_freqs = False, from_G=True, twofreqs=False):
+           freqs=None, exact_astro_freqs = False,
+           from_G=True, twofreqs=False, Gmatrix=None):
     """
     Calculate the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
@@ -126,6 +128,13 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     from_G : bool, optional
         Whether to use G matrix for transmission function calculate. If False
         R-matrix is used.
+
+    twofreqs : bool, optional
+        Whether to calculate a two frequency transmission function.
+
+    Gmatrix : ndarray, optional
+        Provide already calculated G-matrix. This can speed up calculations
+        since the singular value decomposition can take time for large matrices.
     """
     if not from_G and N is None:
         err_msg = 'Covariance Matrix must be provided if constructing'
@@ -154,7 +163,10 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 
     Tmat = np.zeros(nf, dtype='float64')
     if from_G:
-        G = G_matrix(M)
+        if Gmatrix is None:
+            G = G_matrix(M)
+        else:
+            G = Gmatrix
         m = G.shape[1]
         Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
         Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
@@ -172,7 +184,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
 
 def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
                 exact_yr_freqs = False, full_matrix=False,
-                return_Gtilde_Ncal=False, tm_fit=True):
+                return_Gtilde_Ncal=False, tm_fit=True, Gmatrix=None):
     r"""
     Calculate the inverse-noise-wieghted transmission function for a given
     pulsar. This calculates
@@ -199,6 +211,20 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     exact_yr_freqs : bool, optional
         Whether to use exact 1/year and 2/year frequency values in calculation.
 
+    full_matrix : bool, optional
+        Whether to return the full, two frequency NcalInv.
+
+    return_Gtilde_Ncal : bool, optional
+        Whether to return Gtilde and Ncal. Gtilde is the Fourier transform of
+        the G-matrix.
+
+    tm_fit : bool, optional
+        Whether to include the timing model fit in the calculation.
+
+    Gmatrix : ndarray, optional
+        Provide already calculated G-matrix. This can speed up calculations
+        since the singular value decomposition can take time for large matrices.
+
     Returns
     -------
 
@@ -221,9 +247,13 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         ff = freqs
 
     if tm_fit:
-        G = G_matrix(psr.designmatrix)
+        if Gmatrix is None:
+            G = G_matrix(psr.designmatrix)
+        else:
+            G = Gmatrix
     else:
         G = np.eye(toas.size)
+
     Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
     #N_freqs x N_TOA-N_par
 
@@ -305,6 +335,13 @@ class Pulsar(object):
         else:
             self.designmatrix = designmatrix
 
+    @property
+    def G(self):
+        """Inverse Noise Weighted Transmission Function."""
+        if not hasattr(self, '_G'):
+            self._G = G_matrix(designmatrix=self.designmatrix)
+        return self._G
+
 class Spectrum(object):
     """Class to encode the spectral information for a single pulsar.
 
@@ -338,6 +375,7 @@ class Spectrum(object):
         self.phi = psr.phi
         self.theta = psr.theta
         self.N = psr.N
+        self.G = psr.G
         self.designmatrix = psr.designmatrix
         self.pdist = psr.pdist
         self.tm_fit = tm_fit
@@ -377,16 +415,17 @@ class Spectrum(object):
         if not hasattr(self, '_Tf'):
             self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
                                   toas=self.toas, N=self.N,
-                                  freqs=self.freqs, from_G=True,
+                                  freqs=self.freqs, from_G=True, Gmatrix=self.G,
                                   **self.Tf_kwargs)
         return self._Tf
+
 
     @property
     def NcalInv(self):
         """Inverse Noise Weighted Transmission Function."""
         if not hasattr(self, '_NcalInv'):
             self._NcalInv = get_NcalInv(psr=self, freqs=self.freqs,
-                                        tm_fit=self.tm_fit)
+                                        tm_fit=self.tm_fit, Gmatrix=self.G)
         return self._NcalInv
 
     @property
@@ -757,25 +796,16 @@ def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
     #CHANGE BACK
     # psd = red_noise_powerlaw(A=A_GWB, gamma=13./3, freqs=freqs)
     psd = 2*(365.25*24*3600/40)*(1e-6)**2
-    Ch_blocks = [[corr_from_psdIJ(freqs=freqs, psd=psd,
-                                  toasI=pc.toas, toasJ=pr.toas,
-                                  fast=True)
-                  for pr in psrs] for pc in psrs]
+    Ch_blocks = [[(HD([pc.phi,pr.phi],[pc.theta,pr.theta])
+                   *corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
+                                    toasJ=pr.toas, fast=True))
+                  if r!=c
+                  else corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
+                                       toasJ=pr.toas, fast=True)
+                  for r, pr in enumerate(psrs)]
+                  for c, pc in enumerate(psrs)]
 
     C_h = np.block(Ch_blocks)
-
-    #Make spatial correlation matrix, ChiIJ
-    pidx = np.arange(Npsrs)
-    Ntoas = np.array([p.toas.size for p in psrs])
-    blocks = [[(HD([pc.phi,pr.phi],[pc.theta,pr.theta])
-                *np.ones((Ntoas[c],Ntoas[r])))
-               if r!=c
-               else np.ones((Ntoas[c],Ntoas[r]))
-               for r, pr in enumerate(psrs)]
-               for c, pc in enumerate(psrs)]
-
-    ChiIJ = np.block(blocks)
-    C_h *= ChiIJ
 
     C_n = sl.block_diag(*[p.N for p in psrs])
     # C_h = sl.block_diag(*[corr_from_psd(freqs=freqs, psd=psd,
@@ -1040,10 +1070,67 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         integrand = np.matmul(tm, np.conjugate(tm.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toas, toas)
+        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+
+def corr_from_psd_chrom(freqs, psd, toas, obs_freqs, chr_idx, fref=1400., fast=True):
+    """
+    Calculates the correlation matrix over a set of TOAs for a given power
+    spectral density.
+
+    Parameters
+    ----------
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    psd : array
+        Power spectral density to use in calculation of correlation matrix.
+
+    toas : array
+        Pulsar times-of-arrival to use in correlation matrix.
+    
+    obs_freqs : array
+        observation frequency of each ToA
+        
+    chr_idx : float
+        Spectral index of the powerlaw amplitude. 2 for DM noise, 4 for Chrom.
+        
+    fref: float, optional
+        reference frequency for amplitude powerlaw. Usually set to 1400 MHz
+
+    fast : bool, optional
+        Fast mode uses a matix inner product, while the slower mode uses the
+        numpy.trapz function which is slower, but more accurate.
+
+    Returns
+    -------
+
+    corr : array
+        A 2-dimensional array which represents the correlation matrix for the
+        given set of TOAs.
+    """
+    
+    N_toa = len(toas)
+    matrix = np.ones((N_toa,N_toa))
+    
+    for i in range(N_toa):
+        matrix[i,:] = (fref/obs_freqs[i])**chr_idx
+    A_matrix = matrix*matrix.transpose()
+    
+    if fast:
+        df = np.diff(freqs)
+        df = np.append(df,df[-1])
+        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+        integrand = np.matmul(tm, np.conjugate(tm.T))
+        return A_matrix*np.real(integrand)
+    else: #Makes much larger arrays, but uses np.trapz
+        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
+        tm = np.abs(t1-t2)
+        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
     """
@@ -1081,7 +1168,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         integrand = np.matmul(tmI, np.conjugate(tmJ.T))
         return np.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toasI, toasJ)
+        t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
@@ -1212,7 +1299,7 @@ def PI_hc(freqs, Tspan, SNR, S_eff, N=200):
 def get_dt(toas):
     '''Returns average dt between observation epochs given toas.'''
     toas = make_quant(toas, u.s)
-    return np.round(np.diff(np.unique(np.round(toas.to('day')))).mean())
+    return np.diff(np.unique(np.round(toas.to('day')))).mean()
 
 def make_quant(param, default_unit):
     """Convenience function to intialize a parameter as an astropy quantity.
