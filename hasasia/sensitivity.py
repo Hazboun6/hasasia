@@ -364,17 +364,12 @@ class Pulsar(object):
         #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
         #self.designmatrix = self.designmatrix[:, dmx_mask]
         self._G = G_matrix(designmatrix=self.designmatrix)
-        #print("dim designmatrix = ", self.designmatrix.shape)
-        #print("dim G matrxi = ", self.G.shape)
 
     def change_cadence(self, start_time=0, end_time=1_000_000,
-                       cadence=None, cadence_factor=2, uneven=False, 
-                       A_gwb=None, gamma_gwb=13/3., freqs=None,
+                       cadence=None, cadence_factor=4, uneven=False, 
+                       A_gwb=None, alpha_gwb=-2/3., freqs=None,
                        fast=True,):
         """
-        *****************
-        WORK IN PROGRESSS
-        *****************
         Parameters
         ==========
         start_time - float
@@ -382,11 +377,23 @@ class Pulsar(object):
         end_time - float
             MJD at which to end altared cadence.
         cadence - float
-            factor by which to change the observing cadence.
-        
+            cadence for the modified campaign [toas/year]
+        cadence_facter - float
+            (instead of cadence) factor by which to modify the old cadence.
+        uneven - bool
+            whether or not to evenly space observation epochs
+        A_gwb - float
+            amplitude of injected gwb self-noise
+        alpha_gwb - float
+            spectral index of injected gwb self-noise.
+            note that this is residual space spectral index.
+        freqs - array
+            frequencies to construct the gwb noise and intrinsic noise
+        fast - bool
+            faster but slightly less accurate method to calculate noise injected in N.
 
         Change observing cadence in a given time range.
-        Recalculate pulsar properties.
+        Recalculate pulsar noise properties.
         """
         mask_before = self.toas <= start_time * 86400
         mask_after = self.toas >= end_time * 86400
@@ -418,19 +425,82 @@ class Pulsar(object):
             dt = duration / campaign_Ntoas / 8 * yr_sec
             campaign_toas += np.random.uniform(-dt, dt, size=campaign_Ntoas)
         self.toas = np.concatenate([old_toas[mask_before], campaign_toas, old_toas[mask_after]])
-        campaign_toaerrs = np.mean(old_toaerrs)*np.ones(campaign_Ntoas)
-        self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
+        campaign_toaerrs = np.median(old_toaerrs)*np.ones(campaign_Ntoas)
+        # FIXME can only use a fixed toaerr for the duration of the campaign
+        #self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
+        self.toaerrs = np.ones(len(self.toas))*old_toaerrs[0]
+        print(f"old: {len(old_toaerrs)}, new: {len(self.toaerrs)}")
         # recalculate N, designmatrix, G with new toas
         N = np.diag(self.toaerrs**2)
         if self.A_rn is not None:
-            plaw = red_noise_powerlaw(A=10**self.A_rn,
+            plaw = red_noise_powerlaw(A=self.A_rn,
                                       alpha=self.alpha,
                                       freqs=freqs)
             N += corr_from_psd(freqs=freqs, psd=plaw, toas=self.toas, fast=fast)
 
         if A_gwb is not None:
             gwb = red_noise_powerlaw(A=A_gwb,
-                                     alpha=gamma_gwb,
+                                     alpha=alpha_gwb,
+                                     freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=self.toas, fast=fast)
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        self.N = N
+
+    def change_sigma(self, start_time=0, end_time=1_000_000,
+                       new_sigma=None, sigma_factor=4, uneven=False, 
+                       A_gwb=None, alpha_gwb=-2/3., freqs=None,
+                       fast=True,):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin altared cadence.
+        end_time - float
+            MJD at which to end altared cadence.
+        new_sigma - float
+            unvertainty of toas for the modified campaign [microseconds]
+        sigma_facter - float
+            (instead of sigmas) factor by which to modify the campaign sigmas.
+        uneven - bool
+            whether or not to evenly space observation epochs
+        A_gwb - float
+            amplitude of injected gwb self-noise
+        alpha_gwb - float
+            spectral index of injected gwb self-noise.
+            note that this is residual space spectral index (alpha).
+        freqs - array
+            frequencies to construct the gwb noise and intrinsic noise
+        fast - bool
+            faster but slightly less accurate method to calculate noise injected in N.
+
+        Change observing cadence in a given time range.
+        Recalculate pulsar noise properties.
+        """
+        mask_before = self.toas <= start_time * 86400
+        mask_after = self.toas >= end_time * 86400
+        campaign_mask = np.logical_and(self.toas >= start_time * 86400,
+                                    self.toas <= end_time * 86400)
+        campaign_ntoas = np.sum(campaign_mask)
+        # store the old toa errors
+        toaerrs_campaign = self.toaerrs[campaign_mask]
+        # modify the campaign toa errors
+        if sigma_factor is not None:
+            toaerrs_campaign = sigma_factor * toaerrs_campaign
+        elif sigma_factor is None and new_sigma is not None:
+            toaerrs_campaign = np.ones(campaign_ntoas)*new_sigma
+        self.toaerrs = np.concatenate([self.toaerrs[mask_before], toaerrs_campaign, self.toaerrs[mask_after]])
+        # recalculate N, designmatrix, G with new toas
+        N = np.diag(self.toaerrs**2)
+        if self.A_rn is not None:
+            plaw = red_noise_powerlaw(A=self.A_rn,
+                                      alpha=self.alpha,
+                                      freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=self.toas, fast=fast)
+
+        if A_gwb is not None:
+            gwb = red_noise_powerlaw(A=A_gwb,
+                                     alpha=alpha_gwb,
                                      freqs=freqs)
             N += corr_from_psd(freqs=freqs, psd=gwb, toas=self.toas, fast=fast)
         self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
