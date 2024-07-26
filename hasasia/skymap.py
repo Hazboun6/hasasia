@@ -144,7 +144,7 @@ class SkySensitivity(DeterSensitivityCurve):
         An array representing the skymap of amplitudes needed to see the
         given signal with the SNR threshold specified.
         '''
-        if iota is None or psi is None:
+        if iota is None:
             S_eff = self.S_eff
         else:
             S_eff = self.S_eff_full(iota, psi)
@@ -174,11 +174,11 @@ class SkySensitivity(DeterSensitivityCurve):
         integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
         return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
 
-    def sky_response_full(self, iota, psi):
+    def sky_response_full(self, iota, psi=None):
         r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
-        `[1]`_.
+        `[1]`_, but modified so that you calculate it for a particular inclination angle.
 
         .. math::
             \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
@@ -187,28 +187,36 @@ class SkySensitivity(DeterSensitivityCurve):
         '''
         Ap_sqr = (0.5 * (1 + np.cos(iota)**2))**2
         Ac_sqr = (np.cos(iota))**2
-        iota = iota if isinstance(iota, (int,float)) else np.array(iota)
-        psi = psi if isinstance(psi, (int,float)) else np.array(psi)
-        spsi = np.sin(2*np.array(psi))
-        cpsi = np.cos(2*np.array(psi))
-        if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
-            c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
-            c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
-            c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
-            term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
-            term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
-            term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
-        elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
-            c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
-            c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
-            c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
-            term1 = self.Fplus**2 * c1
-            term2 = 2 * self.Fplus * self.Fcross * c2
-            term3 = self.Fcross**2 * c3
+        if psi is None: # case where we average over polarization but not inclination
+            # 0.5 is from averaging over polarization
+            # Fplus*Fcross term goes to zero
+            if isinstance(Ap_sqr,np.ndarray):
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2)* 0.5 * (Ap_sqr + Ac_sqr)
+            elif isinstance(Ap_sqr,(int,float)):
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+        else: # case where we don't average over polarization or inclination
+            iota = iota if isinstance(iota, (int,float)) else np.array(iota)
+            psi = psi if isinstance(psi, (int,float)) else np.array(psi)
+            spsi = np.sin(2*np.array(psi))
+            cpsi = np.cos(2*np.array(psi))
+            if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
+                c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
+                c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
+                c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
+                term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
+                term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
+                term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
+            elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
+                c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
+                c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
+                c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
+                term1 = self.Fplus**2 * c1
+                term2 = 2 * self.Fplus * self.Fcross * c2
+                term3 = self.Fcross**2 * c3
 
-        return term1 + term2 + term3
+            return term1 + term2 + term3
 
-    def S_SkyI_full(self, iota, psi):
+    def S_SkyI_full(self, iota, psi=None):
         """Per Pulsar Strain power sensitivity. """
         t_I = self.T_I / self.Tspan
         RNcalInv = 3.0 * t_I[:,np.newaxis] / self.SnI
@@ -221,14 +229,22 @@ class SkySensitivity(DeterSensitivityCurve):
             if sky_resp.ndim == 2:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis]
                                      * sky_resp[np.newaxis,:,:])
-            if sky_resp.ndim == 4:
+            elif sky_resp.ndim == 3:
+                self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis]
+                                     * sky_resp[np.newaxis,:,:,:])
+            elif sky_resp.ndim == 4:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis,np.newaxis]
                                      * sky_resp[np.newaxis,:,:,:,:])
 
         return self._S_SkyI_full
 
-    def S_eff_full(self, iota, psi):
-        """Strain power sensitivity. """
+    def S_eff_full(self, iota, psi=None):
+        """
+        Strain power sensitivity.
+        
+        Can calculate margninalized over polarization or not
+        with inclination explicit in both cases.
+        """
         if self.pulsar_term == 'explicit':
             raise NotImplementedError('Currently cannot use pulsar term.')
             # self._S_eff_full = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
