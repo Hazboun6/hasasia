@@ -147,7 +147,7 @@ def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
         
     Returns
     -------
-    d_L : float
+    D_L : float
         The luminosity distance to the source [Mpc].
     '''
     return (4*c.c / (h * u.m/u.m)

@@ -273,7 +273,8 @@ class SkySensitivity(DeterSensitivityCurve):
 
     @property
     def S_SkyI(self):
-        """Per Pulsar Strain power sensitivity. """
+        """Per Pulsar Strain power sensitivity.
+           (Technically, 1 over this is the per pulsar strain power sensitivity.)"""
         if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
@@ -309,35 +310,40 @@ class SkySensitivity(DeterSensitivityCurve):
         return self._S_eff_mean
 
 
-def calculate_detection_volume(skymap, frequency, SNR_threshold, M_c):
-    """
-    Calculates the detection volume of your PTA
+def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
+    r"""
+    Calculates the detection volume of the PTA
     at a given frequency or list of frequencies.
 
     Parameters
-    ==========
-    skymap - hasasia.skymap
-        the hasasia.skymap to use
-    frequency - float
+    ----------
+    
+    f0 : float
         the frequency [Hz] at which to calculate detection volume
-    SNR_threshold - float
+        
+    SNR_threshold : float
         the signal to noise to referene detection volume to
-    M_c - float
+
+    M_c : float
         the chirp mass [Msun] at which to reference detection volume
+
     Returns
-    =======
-    volume - float
+    -------
+    
+    volume : float
         the detection volume in Mpc^3
+
     """
-    NSIDE = hp.pixelfunc.npix2nside(skymap.S_eff.shape[1])
+    NSIDE = hp.pixelfunc.npix2nside(self.S_eff.shape[1])
     dA = hp.pixelfunc.nside2pixarea(NSIDE, degrees=False)
-    if isinstance(frequency, (int,float)):
-        f_idx = np.array([np.argmin(abs(skymap.freqs - frequency))])
-    elif isinstance(frequency, (np.ndarray, list)):
-        f_idx = np.array([np.argmin(abs(skymap.freqs - f)) for f in frequency])
-    h0 = skymap.h_thresh(SNR=SNR_threshold)
+    if isinstance(f0, (int,float)):
+        f_idx = np.array([np.argmin(abs(self.freqs - f0))])
+    elif isinstance(f0, (np.ndarray, list)):
+        f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
+    h0 = self.h_thresh(SNR=SNR_threshold)
+    # detection volume is is the sum of detection radius * pixel area over all pixels
     volume = [dA*np.sum(
-        strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, skymap.freqs[fdx])**3,
+        strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
         axis=0).value for fdx in f_idx]
     return volume[0] if len(volume)==1 else volume
 
