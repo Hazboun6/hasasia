@@ -116,8 +116,10 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
-        if iota is None or psi is None:
+        if iota is None and psi is None:
             S_eff = self.S_eff
+        elif psi is not None and iota is None:
+            raise NotImplementedError('Currently cannot marginalize over phase but not inclination.')
         else:
             S_eff = self.S_eff_full(iota, psi)
         return h0 * np.sqrt(self.Tspan / S_eff)
