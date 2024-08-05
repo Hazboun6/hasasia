@@ -7,6 +7,7 @@ import scipy.integrate as si
 import scipy.stats as ss
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+import astropy.constants as c
 
 __all__ = ['create_design_matrix',
            'fap',
@@ -130,6 +131,28 @@ def _solve_F0_given_SNR(snr=3, Npsrs=None):
     '''
     Npsrs = 1 if Npsrs is None else Npsrs 
     return 0.5*(4.*Npsrs+snr**2.)
+
+def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
+    r'''
+    Returns the luminosity distance to a source given the strain, chirp mass, and GW frequency.
+    
+    Parameters
+    ----------
+    h : float
+        The strain of the source.
+    M_c : float
+        The chirp mass of the source [Msun].
+    f0 : float
+        The GW frequency of the source [Hz].
+        
+    Returns
+    -------
+    d_L : float
+        The luminosity distance to the source [Mpc].
+    '''
+    return (4*c.c / (h * u.m/u.m)
+            * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
+            * np.power(np.pi * f0 * u.Hz, 2/3)).to('Mpc')
 
 def theta_phi_to_SkyCoord(theta, phi):
     """
