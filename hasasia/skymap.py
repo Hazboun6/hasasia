@@ -197,9 +197,9 @@ class SkySensitivity(DeterSensitivityCurve):
             # 0.5 is from averaging over polarization
             # Fplus*Fcross term goes to zero
             if isinstance(Ap_sqr,np.ndarray):
-                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2)* 4/5 * (Ap_sqr + Ac_sqr)
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * (Ap_sqr + Ac_sqr)
             elif isinstance(Ap_sqr,(int,float)):
-                return (self.Fplus**2 + self.Fcross**2) * 4/5 * (Ac_sqr + Ap_sqr)
+                return (self.Fplus**2 + self.Fcross**2) * (Ac_sqr + Ap_sqr)
         else: # case where we don't average over polarization or inclination
             iota = iota if isinstance(iota, (int,float)) else np.array(iota)
             psi = psi if isinstance(psi, (int,float)) else np.array(psi)
