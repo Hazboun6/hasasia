@@ -197,9 +197,9 @@ class SkySensitivity(DeterSensitivityCurve):
             # 0.5 is from averaging over polarization
             # Fplus*Fcross term goes to zero
             if isinstance(Ap_sqr,np.ndarray):
-                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 5/4 * (Ap_sqr + Ac_sqr)
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 0.5 * (Ap_sqr + Ac_sqr)
             elif isinstance(Ap_sqr,(int,float)):
-                return (self.Fplus**2 + self.Fcross**2) * 5/4 * (Ac_sqr + Ap_sqr)
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
         else: # case where we don't average over polarization or inclination
             iota = iota if isinstance(iota, (int,float)) else np.array(iota)
             psi = psi if isinstance(psi, (int,float)) else np.array(psi)
@@ -222,7 +222,7 @@ class SkySensitivity(DeterSensitivityCurve):
 
             return term1 + term2 + term3
 
-    def S_SkyI_full(self, iota, psi=None):
+    def S_SkyI_full(self, iota, psi):
         """Per Pulsar Strain power sensitivity. """
         t_I = self.T_I / self.Tspan
         RNcalInv = 3.0 * t_I[:,np.newaxis] / self.SnI
@@ -244,7 +244,7 @@ class SkySensitivity(DeterSensitivityCurve):
 
         return self._S_SkyI_full
 
-    def S_eff_full(self, iota, psi=None):
+    def S_eff_full(self, iota, psi):
         """
         Strain power sensitivity.
         
