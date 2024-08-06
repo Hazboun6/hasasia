@@ -189,6 +189,8 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
+        if iota is None and psi is not None:
+            raise NotImplementedError('Currently cannot marginalize over inclination but not phase.') 
         Ap_sqr = (0.5 * (1 + np.cos(iota)**2))**2
         Ac_sqr = (np.cos(iota))**2
         if psi is None: # case where we average over polarization but not inclination
@@ -197,7 +199,7 @@ class SkySensitivity(DeterSensitivityCurve):
             if isinstance(Ap_sqr,np.ndarray):
                 return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2)* 0.5 * (Ap_sqr + Ac_sqr)
             elif isinstance(Ap_sqr,(int,float)):
-                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+                return (self.Fplus**2 + self.Fcross**2) * 0.25 * (Ac_sqr + Ap_sqr)
         else: # case where we don't average over polarization or inclination
             iota = iota if isinstance(iota, (int,float)) else np.array(iota)
             psi = psi if isinstance(psi, (int,float)) else np.array(psi)
