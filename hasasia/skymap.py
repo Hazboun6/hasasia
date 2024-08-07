@@ -3,9 +3,11 @@ from __future__ import print_function
 """Main module."""
 import numpy as np
 import scipy.special as spec
+import healpy as hp
 import astropy.units as u
 import astropy.constants as c
 from .sensitivity import DeterSensitivityCurve, resid_response, get_dt
+from .utils import strain_and_chirp_mass_to_luminosity_distance
 
 __all__ = ['SkySensitivity',
            'h_circ',
@@ -114,8 +116,10 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
-        if iota is None or psi is None:
+        if iota is None and psi is None:
             S_eff = self.S_eff
+        elif psi is not None and iota is None:
+            raise NotImplementedError('Currently cannot marginalize over phase but not inclination.')
         else:
             S_eff = self.S_eff_full(iota, psi)
         return h0 * np.sqrt(self.Tspan / S_eff)
@@ -144,7 +148,7 @@ class SkySensitivity(DeterSensitivityCurve):
         An array representing the skymap of amplitudes needed to see the
         given signal with the SNR threshold specified.
         '''
-        if iota is None or psi is None:
+        if iota is None:
             S_eff = self.S_eff
         else:
             S_eff = self.S_eff_full(iota, psi)
@@ -174,39 +178,49 @@ class SkySensitivity(DeterSensitivityCurve):
         integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
         return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
 
-    def sky_response_full(self, iota, psi):
+    def sky_response_full(self, iota, psi=None):
         r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
-        `[1]`_.
+        `[1]`_, but modified so that you calculate it for a particular inclination angle.
 
         .. math::
             \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
+        if iota is None and psi is not None:
+            raise NotImplementedError('Currently cannot marginalize over inclination but not phase.') 
         Ap_sqr = (0.5 * (1 + np.cos(iota)**2))**2
         Ac_sqr = (np.cos(iota))**2
-        iota = iota if isinstance(iota, (int,float)) else np.array(iota)
-        psi = psi if isinstance(psi, (int,float)) else np.array(psi)
-        spsi = np.sin(2*np.array(psi))
-        cpsi = np.cos(2*np.array(psi))
-        if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
-            c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
-            c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
-            c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
-            term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
-            term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
-            term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
-        elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
-            c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
-            c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
-            c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
-            term1 = self.Fplus**2 * c1
-            term2 = 2 * self.Fplus * self.Fcross * c2
-            term3 = self.Fcross**2 * c3
+        if psi is None: # case where we average over polarization but not inclination
+            # 0.5 is from averaging over polarization
+            # Fplus*Fcross term goes to zero
+            if isinstance(Ap_sqr,np.ndarray):
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 0.5 * (Ap_sqr + Ac_sqr)
+            elif isinstance(Ap_sqr,(int,float)):
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+        else: # case where we don't average over polarization or inclination
+            iota = iota if isinstance(iota, (int,float)) else np.array(iota)
+            psi = psi if isinstance(psi, (int,float)) else np.array(psi)
+            spsi = np.sin(2*np.array(psi))
+            cpsi = np.cos(2*np.array(psi))
+            if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
+                c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
+                c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
+                c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
+                term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
+                term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
+                term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
+            elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
+                c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
+                c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
+                c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
+                term1 = self.Fplus**2 * c1
+                term2 = 2 * self.Fplus * self.Fcross * c2
+                term3 = self.Fcross**2 * c3
 
-        return term1 + term2 + term3
+            return term1 + term2 + term3
 
     def S_SkyI_full(self, iota, psi):
         """Per Pulsar Strain power sensitivity. """
@@ -221,14 +235,22 @@ class SkySensitivity(DeterSensitivityCurve):
             if sky_resp.ndim == 2:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis]
                                      * sky_resp[np.newaxis,:,:])
-            if sky_resp.ndim == 4:
+            elif sky_resp.ndim == 3:
+                self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis]
+                                     * sky_resp[np.newaxis,:,:,:])
+            elif sky_resp.ndim == 4:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis,np.newaxis]
                                      * sky_resp[np.newaxis,:,:,:,:])
 
         return self._S_SkyI_full
 
     def S_eff_full(self, iota, psi):
-        """Strain power sensitivity. """
+        """
+        Strain power sensitivity.
+        
+        Can calculate margninalized over polarization or not
+        with inclination explicit in both cases.
+        """
         if self.pulsar_term == 'explicit':
             raise NotImplementedError('Currently cannot use pulsar term.')
             # self._S_eff_full = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
@@ -255,7 +277,8 @@ class SkySensitivity(DeterSensitivityCurve):
 
     @property
     def S_SkyI(self):
-        """Per Pulsar Strain power sensitivity. """
+        """Per Pulsar Strain power sensitivity.
+           (Technically, 1 over this is the per pulsar strain power sensitivity.)"""
         if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
@@ -289,6 +312,44 @@ class SkySensitivity(DeterSensitivityCurve):
             else:
                 self._S_eff_mean = 1.0 / (12./5 * mean_sky)
         return self._S_eff_mean
+
+
+def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
+    r"""
+    Calculates the detection volume of the PTA
+    at a given frequency or list of frequencies.
+
+    Parameters
+    ----------
+    
+    f0 : float
+        the frequency [Hz] at which to calculate detection volume
+        
+    SNR_threshold : float
+        the signal to noise to referene detection volume to
+
+    M_c : float
+        the chirp mass [Msun] at which to reference detection volume
+
+    Returns
+    -------
+    
+    volume : float
+        the detection volume in Mpc^3
+
+    """
+    NSIDE = hp.pixelfunc.npix2nside(self.S_eff.shape[1])
+    dA = hp.pixelfunc.nside2pixarea(NSIDE, degrees=False)
+    if isinstance(f0, (int,float)):
+        f_idx = np.array([np.argmin(abs(self.freqs - f0))])
+    elif isinstance(f0, (np.ndarray, list)):
+        f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
+    h0 = self.h_thresh(SNR=SNR_threshold)
+    # detection volume is is the sum of detection radius * pixel area over all pixels
+    volume = [dA*np.sum(
+        strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
+        axis=0).value for fdx in f_idx]
+    return volume[0] if len(volume)==1 else volume
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):

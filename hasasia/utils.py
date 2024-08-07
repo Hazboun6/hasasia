@@ -5,6 +5,9 @@ import scipy.optimize as sopt
 import scipy.special as ssp
 import scipy.integrate as si
 import scipy.stats as ss
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+import astropy.constants as c
 
 __all__ = ['create_design_matrix',
            'fap',
@@ -87,30 +90,115 @@ def pdf_F_signal(F, snr, Npsrs=None):
         N = int(4 * Npsrs)
     return ss.ncx2.pdf(2*F, N, snr**2)
 
-def fdp(F0, snr, Npsrs=None, sky_ave=False):
+def false_dismissal_prob(F0, snr, Npsrs=None, iota_psi_ave=False):
     '''
-    False detection probability of the F-statistic
+    False dismissal probability of the F-statistic
     Use None for the Fe statistic and the number of pulsars for the Fp stat.
     '''
     if Npsrs is None:
         N = 4
     elif isinstance(Npsrs,int):
         N = int(4 * Npsrs)
-    if sky_ave:
+    if iota_psi_ave:
         return ss.chi2.cdf(2*F0, df=N, loc=snr**2)
     else:
         return ss.ncx2.cdf(2*F0, df=N, nc=snr**2)
 
+def detection_prob(F0, snr, Npsrs=None, iota_psi_ave=False):
+    '''
+    Detection probability of the F-statistic
+    Use None for the Fe and the number of pulsars for the Fp stat.
+    '''
+    return 1 - false_dismissal_prob(F0, snr, Npsrs, iota_psi_ave)
 
 def _solve_F_given_fap(fap0=0.003, Npsrs=None):
     return sopt.fsolve(lambda F :fap(F, Npsrs=Npsrs)-fap0, 10)
 
-def _solve_F_given_fdp_snr(fdp0=0.05, snr=3, Npsrs=None, sky_ave=False):
+def _solve_F_given_fdp_snr(fdp0=0.05, snr=3, Npsrs=None, iota_psi_ave=False):
     Npsrs = 1 if Npsrs is None else Npsrs
     F0 = (4*Npsrs+snr**2)/2
-    return sopt.fsolve(lambda F :fdp(F, snr, Npsrs=Npsrs, sky_ave=sky_ave)-fdp0, F0)
+    return sopt.fsolve(lambda F :false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, F0)
 
-def _solve_snr_given_fdp_F(fdp0=0.05, F=3, Npsrs=None, sky_ave=False):
+def _solve_snr_given_fdp_F(fdp0=0.05, F=3, Npsrs=None, iota_psi_ave=False):
     Npsrs = 1 if Npsrs is None else Npsrs
     snr0 = np.sqrt(2*F-4*Npsrs)
-    return sopt.fsolve(lambda snr :fdp(F, snr, Npsrs=Npsrs, sky_ave=sky_ave)-fdp0, snr0)
+    return sopt.fsolve(lambda snr :false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, snr0)
+
+def _solve_F0_given_SNR(snr=3, Npsrs=None):
+    '''
+    Returns the F0 (Fe stat threshold for a specified SNR)
+    Use None for the Fe and the number of pulsars for the Fp stat.
+    '''
+    Npsrs = 1 if Npsrs is None else Npsrs 
+    return 0.5*(4.*Npsrs+snr**2.)
+
+def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
+    r'''
+    Returns the luminosity distance to a source given the strain, chirp mass, and GW frequency.
+    
+    Parameters
+    ----------
+    h : float
+        The strain of the source.
+    M_c : float
+        The chirp mass of the source [Msun].
+    f0 : float
+        The GW frequency of the source [Hz].
+        
+    Returns
+    -------
+    D_L : float
+        The luminosity distance to the source [Mpc].
+    '''
+    return (4*c.c / (h * u.m/u.m)
+            * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
+            * np.power(np.pi * f0 * u.Hz, 2/3)).to('Mpc')
+
+def theta_phi_to_SkyCoord(theta, phi):
+    r'''
+    Takes in a celestial longitude and lattitude and returns an `astropy.SkyCoord` object.
+    
+    Parameters
+    ----------
+    phi : float, array of floats
+        The celestial longitude in solar system coordinates.
+    theta : float, array of floats
+        The celestial lattitude in solar system coordinates.
+    
+    Returns
+    -------
+    skycoord - astropy.SkyCoord object
+        Can use this to convert to ra, dec, etc.
+        (e.g. SkyCoord.ra.deg)
+
+    '''
+
+    return SkyCoord(phi*u.rad, ( theta - np.pi/2 )*u.rad)
+
+def skycoord_to_Jname(skycoord):
+    '''
+    Takes in a SkyCoord object and returns the Jname of a pulsar with given coordinates.
+    
+    Parameters
+    ----------
+    skycoord - astropy.SkyCoord object
+        Can use `theta_phi_to_SkyCoord()` to get this.
+    
+    Returns
+    -------
+    Jname - string, array of strings
+        The traditional Jname of a pulsar with given coordinates
+        (eg. 'J1713+0747')
+    
+    '''
+    coord_pieces = [
+            str(skycoord.ra.hms[0]).split('.')[0], 
+            str(skycoord.ra.hms[1]).split('.')[0], 
+            str(abs(skycoord.dec.hms[0])).split('.')[0], 
+            str(abs(skycoord.dec.hms[1])).split('.')[0]
+            ]
+    sign = ['-','+'][int(skycoord.dec.hms[0]>0)]
+    for i, piece in enumerate(coord_pieces):
+        if len(str(abs(int(piece)))) < 2:
+            coord_pieces[i] = '0' + str(piece)
+    return 'J' + coord_pieces[0] + coord_pieces[1] + sign + coord_pieces[2] +coord_pieces[3]
