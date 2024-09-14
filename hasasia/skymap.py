@@ -346,7 +346,7 @@ def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
         f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
     h0 = self.h_thresh(SNR=SNR_threshold)
     # detection volume is is the sum of detection radius * pixel area over all pixels
-    volume = [dA*np.sum(
+    volume = [dA/3.*np.sum(
         strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
         axis=0).value for fdx in f_idx]
     return volume[0] if len(volume)==1 else volume
