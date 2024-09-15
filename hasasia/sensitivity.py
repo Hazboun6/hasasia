@@ -265,6 +265,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
 
     TfN = np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
+    # N_freq x N_freq
     if return_Gtilde_Ncal:
         return np.real(TfN), Gtilde, Ncal
     elif full_matrix:
@@ -848,7 +849,7 @@ class GWBSensitivityCurve(SensitivityCurve):
     def dmu_dbeta_pl_gwb(self, A_gwb, alpha_gwb, components=14):
         """Derivative of the GWB signal template (mu) w.r.t. the signal parameters (beta).
         $$\mu_{\rm GWB} = \frac{A_{\rm GWB}}{12\pi^2} * \left(\frac{f}{f_{\rm ref}}\right)^{-2\alpha} \rm yr^3"""
-        # FIXME : how to deal with the frequency dependence of these derivatives ??
+        # FIXME : what units should this be in ??
         fbins = np.linspace(1/self.Tspan, components/self.Tspan, components)
         # dmu_dA = A_gwb/(12*np.pi**2)*(fbins/fyr)**(-2*alpha_gwb) * \
         #             yr_sec**3 * np.log(10)
@@ -876,8 +877,11 @@ class GWBSensitivityCurve(SensitivityCurve):
                         Agwb, alpha_gwb,
                         log10_gw_rhos,
                         psd_type='powerlaw',
-                        components=14):
-        """GWB Fisher Matrix"""
+                        components=14,psr=None):
+        """
+        GWB Fisher Matrix
+        Fisher matrix = signal derivative x noise covariance x signal derivative
+        """
         if psd_type == 'powerlaw':
             assert(Agwb is not None)
             assert(alpha_gwb is not None)
@@ -891,7 +895,16 @@ class GWBSensitivityCurve(SensitivityCurve):
         fbins=np.linspace(1/self.Tspan, components/self.Tspan, components)
         fidxs = np.array([np.argmin(abs(self.freqs - f)) for f in fbins])
         # FIXME: check the order of opperations here
-        mathcalF = np.matmul(dmu_dbeta.T, np.linalg.inv(self.S_eff[fidxs][None, :]), dmu_dbeta)
+        #ncalinv = get_NcalInv(psr, freqs=self.freqs[fidxs])
+        print("seff: ", np.diag(self.S_eff[fidxs]).shape)
+        print("dmu: ", dmu_dbeta.shape)
+        print("ncalinv: ", psr.NcalInv.shape)
+        #first = np.matmul(np.diag(psr.NcalInv[fidxs]), dmu_dbeta.T)
+        first = np.matmul(np.diag(self.S_eff[fidxs]), dmu_dbeta.T)
+        print(first.shape)
+        mathcalF = np.matmul(dmu_dbeta, first)
+        # 
+        #
         
         return mathcalF
 
@@ -899,15 +912,20 @@ class GWBSensitivityCurve(SensitivityCurve):
                              Agwb=None, alpha_gwb=None,
                              log10_gw_rhos=None,
                              psd_type='powerlaw',
-                             components=14):
-        """GWB Fisher Matrix Uncertainty"""
+                             components=14,psr=None):
+        """
+        GWB Fisher Matrix Uncertainty
+        uncertainty of the i'th param is the square root of the the
+        (i,i) element of the inverse Fisher matrix
+        """
 
         mathcalF = self.GWBFisherMatrix(Agwb, alpha_gwb,
                                         log10_gw_rhos,
                                         psd_type=psd_type,
-                                        components=components)
+                                        components=components,psr=psr)
         print(mathcalF.shape)
         mathcalFinv = np.linalg.inv(mathcalF)
+        #mathcalFinv = mathcalF
         
         return np.sqrt(np.diag(mathcalFinv))
 
