@@ -313,6 +313,36 @@ class SkySensitivity(DeterSensitivityCurve):
                 self._S_eff_mean = 1.0 / (12./5 * mean_sky)
         return self._S_eff_mean
 
+    @property
+    def dmu_dbeta_cw(self, Mc, D_l, f0, theta_cw, phi_cw, h0,
+                     iota=None, psi=None, phi0=None):
+        """Derivative of the CGW signal template (mu) w.r.t. the signal parameters (beta).
+        $$\mu_{\rm CW} = h_+ F^+_I(\hat{k}) + h_x F^x_I(\hat{k})"""
+        hplus = jj
+        hcross = jj
+        h0 = h0_circ(Mc, D_l, f0)
+        dmu_dbeta = []
+        
+        return np.array(dmu_dbeta)
+
+    @property
+    def CWFisherMatrix(self, Mc, f0, theta_cw, phi_cw, h0,
+                       iota=None, psi=None, phi0=None):
+        """Continuous GW Fisher Matrix"""
+        dmu_dbeta = self.dmu_dbeta_cw(Mc, f0, theta_cw, phi_cw, h0, iota=None, psi=None, phi0=None)
+        mathcalF = dmu_dbeta.T  * self.NcalInv * dmu_dbeta
+
+        return mathcalF
+
+    @property
+    def CWFisherUncertainty(self, Mc, f0, theta_cw, phi_cw, h0,
+                             iota=None, psi=None, phi0=None):
+        """GWB Fisher Matrix Uncertainty"""
+        mathcalF = self.CWFisherMatrix(Mc, f0, theta_cw, phi_cw, h0,
+                                       iota=None, psi=None, phi0=None)
+        mathcalFinv = np.linalg.inv(mathcalF)
+        
+        return np.sqrt(np.diag(mathcalFinv))
 
 def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
     r"""

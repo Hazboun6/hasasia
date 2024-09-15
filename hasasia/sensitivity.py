@@ -845,6 +845,72 @@ class GWBSensitivityCurve(SensitivityCurve):
 
         return self._S_effIJ
 
+    def dmu_dbeta_pl_gwb(self, A_gwb, alpha_gwb, components=14):
+        """Derivative of the GWB signal template (mu) w.r.t. the signal parameters (beta).
+        $$\mu_{\rm GWB} = \frac{A_{\rm GWB}}{12\pi^2} * \left(\frac{f}{f_{\rm ref}}\right)^{-2\alpha} \rm yr^3"""
+        # FIXME : how to deal with the frequency dependence of these derivatives ??
+        fbins = np.linspace(1/self.Tspan, components/self.Tspan, components)
+        # dmu_dA = A_gwb/(12*np.pi**2)*(fbins/fyr)**(-2*alpha_gwb) * \
+        #             yr_sec**3 * np.log(10)
+        # dmu_dalpha = A_gwb/(12*np.pi**2)*(fbins/fyr)**(-2*alpha_gwb) * \
+        #             yr_sec**3 * np.log(fbins/fyr)
+        #     As S_h=A^2*(f/fyr)^(2*alpha)/f
+        dmu_dA = A_gwb*(fbins/fyr)**(alpha_gwb) * np.log(10)
+        dmu_dalpha = A_gwb*(fbins/fyr)**(alpha_gwb) * np.log(fbins/fyr)
+        
+        return np.array([dmu_dA, dmu_dalpha])
+
+    def dmu_dbeta_freespec_gwb(self, log10_gw_rhos):
+        """Derivative of the GWB signal template (mu) w.r.t. the signal parameters (beta).
+        $$\mu_{\rm GWB} = \rho_{i}^2"""
+        dmu_drhos = []
+        for i, _ in enumerate(log10_gw_rhos):
+            dmu_drho = np.zeros(len(log10_gw_rhos))
+            # https://www.wolframalpha.com/input?i=derivative+of+10%5Ex%5E2+wrt+x
+            dmu_drho[i]+=10**log10_gw_rhos**2 * np.log(10) * 2*log10_gw_rhos
+            dmu_drhos.append(dmu_drho)
+
+        return np.array(dmu_drhos)
+
+    def GWBFisherMatrix(self,
+                        Agwb, alpha_gwb,
+                        log10_gw_rhos,
+                        psd_type='powerlaw',
+                        components=14):
+        """GWB Fisher Matrix"""
+        if psd_type == 'powerlaw':
+            assert(Agwb is not None)
+            assert(alpha_gwb is not None)
+            dmu_dbeta = self.dmu_dbeta_pl_gwb(Agwb, alpha_gwb, components=components)
+        elif psd_type == 'freespec':
+            assert(log10_gw_rhos is not None)
+            dmu_dbeta = self.dmu_dbeta_freespec_gwb(log10_gw_rhos)
+        else:
+            raise NotImplementedError(f"{psd_type} PSD not supported yet! \
+                                      Choose \'powerlaw\' or \'freespec\'.")
+        fbins=np.linspace(1/self.Tspan, components/self.Tspan, components)
+        fidxs = np.array([np.argmin(abs(self.freqs - f)) for f in fbins])
+        # FIXME: check the order of opperations here
+        mathcalF = np.matmul(dmu_dbeta.T, np.linalg.inv(self.S_eff[fidxs][None, :]), dmu_dbeta)
+        
+        return mathcalF
+
+    def GWBFisherUncertainty(self,
+                             Agwb=None, alpha_gwb=None,
+                             log10_gw_rhos=None,
+                             psd_type='powerlaw',
+                             components=14):
+        """GWB Fisher Matrix Uncertainty"""
+
+        mathcalF = self.GWBFisherMatrix(Agwb, alpha_gwb,
+                                        log10_gw_rhos,
+                                        psd_type=psd_type,
+                                        components=components)
+        print(mathcalF.shape)
+        mathcalFinv = np.linalg.inv(mathcalF)
+        
+        return np.sqrt(np.diag(mathcalFinv))
+
 
 class DeterSensitivityCurve(SensitivityCurve):
     '''
