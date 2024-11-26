@@ -96,7 +96,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
            freqs=None, exact_astro_freqs = False,
            from_G=True, twofreqs=False, Gmatrix=None):
     """
-    Calculate the transmission function for a given pulsar design matrix, TOAs
+         the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
 
     Parameters
