@@ -2,7 +2,10 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-import scipy.special as spec
+import scipy.optimize as sopt
+import scipy.special as ssp
+import scipy.integrate as si
+import scipy.stats as ss
 import healpy as hp
 import astropy.units as u
 import astropy.constants as c
@@ -105,7 +108,7 @@ class SkySensitivity(DeterSensitivityCurve):
             self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
                                  * self.pt_sqr)
 
-    def SNR(self, h0, iota=None, psi=None):
+    def SNR(self, h0, iota=None, psi=None, fidx=None):
         r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
@@ -116,12 +119,17 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
+       
         if iota is None and psi is None:
             S_eff = self.S_eff
         elif psi is not None and iota is None:
-            raise NotImplementedError('Currently cannot marginalize over phase but not inclination.')
+            raise NotImplementedError('Currently cannot marginalize over polarization angle only.')
         else:
             S_eff = self.S_eff_full(iota, psi)
+
+        if fidx is not None:
+            S_eff = S_eff[fidx,:]
+
         return h0 * np.sqrt(self.Tspan / S_eff)
 
 
@@ -201,26 +209,55 @@ class SkySensitivity(DeterSensitivityCurve):
             elif isinstance(Ap_sqr,(int,float)):
                 return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
         else: # case where we don't average over polarization or inclination
+            c_pluplus, c_pluscross, c_crosscross = self._angle_coefficients(iota=iota, psi=psi)
+            if isinstance(Ap_sqr,np.ndarray) or isinstance(psi,np.ndarray):
+                term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c_pluplus
+                term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c_pluscross
+                term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c_crosscross
+            elif isinstance(Ap_sqr,(int,float)) or isinstance(psi,(int,float)):
+                term1 = self.Fplus**2 * c_pluplus
+                term2 = 2 * self.Fplus * self.Fcross * c_pluscross
+                term3 = self.Fcross**2 * c_crosscross
+
+            return term1 + term2 + term3
+        
+    def _angle_coefficients(self, iota, psi=None):
+        r'''
+        Calculate the signal-to-noise ratio of a source given the strain
+        amplitude. This is based on Equation (79) from Hazboun, et al., 2019
+        `[1]`_, but modified so that you calculate it for a particular inclination angle.
+
+        .. math::
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        '''
+        if iota is None and psi is not None:
+            raise NotImplementedError('Currently can marginalize over inclination but not phase.') 
+        Ap_sqr = (1 + np.cos(iota)**2)**2 # (0.5 * (1 + np.cos(iota)**2))**2
+        Ac_sqr = (2*np.cos(iota))**2
+        if psi is None: # case where we average over polarization but not inclination
+            # 0.5 is from averaging over polarization
+            # Fplus*Fcross term goes to zero
+            if isinstance(Ap_sqr,np.ndarray):
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 0.5 * (Ap_sqr + Ac_sqr)
+            elif isinstance(Ap_sqr,(int,float)):
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+        else: # case where we don't average over polarization or inclination
             iota = iota if isinstance(iota, (int,float)) else np.array(iota)
             psi = psi if isinstance(psi, (int,float)) else np.array(psi)
             spsi = np.sin(2*np.array(psi))
             cpsi = np.cos(2*np.array(psi))
             if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
-                c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
-                c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
-                c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
-                term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
-                term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
-                term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
+                c_pluplus = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
+                c_pluscross = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
+                c_crosscross = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
             elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
-                c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
-                c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
-                c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
-                term1 = self.Fplus**2 * c1
-                term2 = 2 * self.Fplus * self.Fcross * c2
-                term3 = self.Fcross**2 * c3
+                c_pluplus = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
+                c_pluscross = (Ap_sqr - Ac_sqr) * cpsi * spsi
+                c_crosscross = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
 
-            return term1 + term2 + term3
+            return c_pluplus, c_pluscross, c_crosscross
 
     def S_SkyI_full(self, iota, psi):
         """Per Pulsar Strain power sensitivity. """
@@ -262,17 +299,114 @@ class SkySensitivity(DeterSensitivityCurve):
             self._S_eff_full = 1.0 / np.sum(self.S_SkyI_full(iota, psi), axis=1)
 
         return self._S_eff_full
+    
+    def fap(self, F, Npsrs=None):
+        '''
+        False alarm probability of the F-statistic
+        Use None for the Fe statistic and the number of pulsars for the Fp stat.
+        '''
+        if Npsrs is None:
+            N = [0,1]
+        elif isinstance(Npsrs,int):
+            N = np.arange((4*Npsrs)/2-1, dtype=float)
+        # else:
+        #     raise ValueError('Npsrs must be an integer or None (for Fe)')
+        return np.exp(-F)*np.sum([(F**k)/np.math.factorial(k) for k in N])
+
+    def pdf_F_signal(self, F, snr, Npsrs=None):
+        if Npsrs is None:
+            N = 4
+        elif isinstance(Npsrs,int):
+            N = int(4 * Npsrs)
+        return ss.ncx2.pdf(2*F, N, snr**2)
+
+    def false_dismissal_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None,'fidx':None}):
+        '''
+        False dismissal probability of the F-statistic
+        Use None for the Fe statistic and the number of pulsars for the Fp stat.
+
+        Parameters
+        ----------
+        F_thresh : float,array
+            F-statistic threshold
+
+        snr : float, optional
+            Signal to noise ratio for a given single source.
+
+        Npsrs : string, optional
+            Number of pulsar sin the array for using the Fp statistic.
+            Use None for the Fe statistic.
+
+        Returns
+        -------
+        fdp : float, array
+            False dismissal probability for a given F-statistic threshold.
+
+        '''
+        if Npsrs is None:
+            N = 4
+        elif isinstance(Npsrs,int):
+            N = int(4 * Npsrs)
+        
+        if ave is None or ave=='none':
+            return ss.ncx2.cdf(2*F_thresh, df=N, nc=snr**2)
+        elif ave=='snr':
+            return ss.chi2.cdf(2*F_thresh, df=N, loc=snr**2)
+        elif ave=='prob':
+            if prob_kwargs['fidx'] is None:
+                raise ValueError('fidx must be set!')
+            return self._fdp_angle_averaged(F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+
+    def detection_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None,'fidx':None}):
+        '''
+        Detection probability of the F-statistic
+        Use None for the Fe and the number of pulsars for the Fp stat.
+        '''
+        return 1 - self.false_dismissal_prob(F_thresh, snr, Npsrs, ave, prob_kwargs)
+
+    def _fdp_angle_averaged(self, F_thresh, h0, fidx):
+        '''
+        The angle-averaged false dismissal probablity. See arXiv....
+        '''
+        integrand = lambda psi, iota: np.sin(iota)/np.pi*ss.ncx2.cdf(2*F_thresh, df=4, 
+                                                                     nc=self.SNR(h0,iota,psi,fidx).mean()**2)
+        return si.dblquad(integrand,0,np.pi,-np.pi/4,np.pi/4)[0]
+    
+    def _solve_F_given_fap(self, fap0=0.003, Npsrs=None):
+        return sopt.fsolve(lambda F :self.fap(F, Npsrs=Npsrs)-fap0, 10)
+
+    def _solve_F_given_fdp_snr(self, fdp0=0.05, snr=3, Npsrs=None, iota_psi_ave=False):
+        Npsrs = 1 if Npsrs is None else Npsrs
+        F0 = (4*Npsrs+snr**2)/2
+        return sopt.fsolve(lambda F :self.false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, F0)
+
+    def _solve_snr_given_fdp_F(self, fdp0=0.05, F=3, Npsrs=None, iota_psi_ave=False):
+        Npsrs = 1 if Npsrs is None else Npsrs
+        snr0 = np.sqrt(2*F-4*Npsrs)
+        return sopt.fsolve(lambda snr :self.false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, snr0)
+
+    def _solve_F0_given_SNR(self, snr=3, Npsrs=None):
+        '''
+        Returns the F0 (Fe stat threshold for a specified SNR)
+        Use None for the Fe and the number of pulsars for the Fp stat.
+        '''
+        Npsrs = 1 if Npsrs is None else Npsrs 
+        return 0.5*(4.*Npsrs+snr**2.)
 
     @property
     def S_eff(self):
-        """Strain power sensitivity. """
+        """
+        Strain power sensitivity. NOTE: The prefactors in these expressions are a factor of 4x larger than in 
+        Hazboun, et al., 2019 `[1]` due to a redefinition of h0 to match the one in normal use in the PTA community.
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
         if not hasattr(self, '_S_eff'):
             if self.pulsar_term == 'explicit':
-                self._S_eff = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (16./5 * np.sum(self.S_SkyI, axis=1))
             elif self.pulsar_term:
-                self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (48./5 * np.sum(self.S_SkyI, axis=1))
             else:
-                self._S_eff = 1.0 / (6./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (24./5 * np.sum(self.S_SkyI, axis=1))
         return self._S_eff
 
     @property
