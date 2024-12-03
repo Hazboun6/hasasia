@@ -751,6 +751,9 @@ class SensitivityCurve(object):
         with open(filepath, "wb") as fout:
             pickle.dump(self, fout)
 
+    def fidx(self,f):
+        return np.argmin(np.abs(self.freqs-f))
+
     @property
     def S_eff(self):
         """Strain power sensitivity. """
