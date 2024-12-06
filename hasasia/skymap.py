@@ -363,6 +363,24 @@ class SkySensitivity(DeterSensitivityCurve):
         Use None for the Fe and the number of pulsars for the Fp stat.
         '''
         return 1 - self.false_dismissal_prob(F_thresh, snr, Npsrs, ave, prob_kwargs)
+    
+    def total_detection_probability(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None, 'fidx': None}):
+        '''
+        See equation ## in Rosado.
+        Can be interpretted as the probability of detecting a single source
+        in *any* frequency bin.
+        
+        '''
+        return 1. - np.prod(
+            [self.false_dismissal_prob(
+                F_thresh,
+                snr=snr,
+                Npsrs=Npsrs,
+                ave=ave,
+                prob_kwargs={'h0':h0,'fidx':fidx})
+             for h0, fidx in zip(prob_kwargs['h0'],prob_kwargs['fidx'])
+            ],
+            axis=0)
 
     def _fdp_angle_averaged(self, F_thresh, h0, fidx):
         '''

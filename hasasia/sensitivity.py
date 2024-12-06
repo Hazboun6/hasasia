@@ -758,7 +758,11 @@ class SensitivityCurve(object):
             pickle.dump(self, fout)
 
     def fidx(self,f):
-        return np.argmin(np.abs(self.freqs-f))
+        """Get the indices of a frequencies in the frequency array."""
+        if isinstance(f, int) or isinstance(f, float):
+            f = np.array([f])
+            f = np.asarray(f)
+        return np.array([np.argmin(abs(ff-self.freqs)) for ff in f])
 
     @property
     def S_eff(self):

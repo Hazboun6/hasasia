@@ -93,6 +93,28 @@ def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
             * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
             * np.power(np.pi * f0 * u.Hz, 2/3)).to('Mpc')
 
+def char_strain_to_strain_amp(hc, fc, df):
+    r'''
+    Calculate the strain amplitude of single sources given
+    their characteristic strains.
+
+    Parameters
+    ----------
+    hc : array_like
+        Characteristic strain of the single sources.
+    fc : array_like
+        Observed orbital frequency bin centers.
+    df : array_like
+        Observed orbital frequency bin widths.
+
+    Returns
+    -------
+    hs : 
+        Strain amplitude of the single sources.
+
+    '''
+    return hc * np.sqrt(df/fc)
+
 def theta_phi_to_SkyCoord(theta, phi):
     r'''
     Takes in a celestial longitude and lattitude and returns an `astropy.SkyCoord` object.
@@ -141,3 +163,28 @@ def skycoord_to_Jname(skycoord):
         if len(str(abs(int(piece)))) < 2:
             coord_pieces[i] = '0' + str(piece)
     return 'J' + coord_pieces[0] + coord_pieces[1] + sign + coord_pieces[2] +coord_pieces[3]
+
+def distance_on_sphere(lat1, lon1, lat2, lon2):
+    ''''
+    Returns the distance between two points on the surface of the unit sphere.
+    
+    Parameters
+    ==========
+    lat1, lat2 - float
+        lattitude of first and second point respectively
+    lon1, lon2 - float
+        longitude of first and second point respectively
+    Returns
+    =======
+    distance - float
+        distance between two points
+    '''
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    
+    # Haversine formula for distance
+    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    distance = c
+    
+    return distance
