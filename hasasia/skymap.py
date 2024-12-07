@@ -386,6 +386,7 @@ class SkySensitivity(DeterSensitivityCurve):
         '''
         The angle-averaged false dismissal probablity. See arXiv....
         '''
+        snr = self.SNR(h0,0,0,fidx)
         integrand = lambda psi, iota: np.sin(iota)/np.pi*ss.ncx2.cdf(2*F_thresh, df=4, 
                                                                      nc=self.SNR(h0,iota,psi,fidx).mean()**2)
         return si.dblquad(integrand,0,np.pi,-np.pi/4,np.pi/4)[0]
@@ -395,7 +396,7 @@ class SkySensitivity(DeterSensitivityCurve):
 
     def _solve_F_given_fdp_snr(self, fdp0=0.05, snr=3, Npsrs=None, iota_psi_ave=False):
         Npsrs = 1 if Npsrs is None else Npsrs
-        F0 = (4*Npsrs+snr**2)/2
+        F0 = (4*Npsrs+snr**2)/2 
         return sopt.fsolve(lambda F :self.false_dismissal_prob(F, snr, Npsrs=Npsrs, iota_psi_ave=iota_psi_ave)-fdp0, F0)
 
     def _solve_snr_given_fdp_F(self, fdp0=0.05, F=3, Npsrs=None, iota_psi_ave=False):
