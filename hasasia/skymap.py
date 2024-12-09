@@ -320,7 +320,7 @@ class SkySensitivity(DeterSensitivityCurve):
             N = int(4 * Npsrs)
         return ss.ncx2.pdf(2*F, N, snr**2)
 
-    def false_dismissal_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None,'fidx':None}):
+    def false_dismissal_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'int_method': 'dblquad','h0':None,'fidx':None}):
         '''
         False dismissal probability of the F-statistic
         Use None for the Fe statistic and the number of pulsars for the Fp stat.
@@ -355,7 +355,12 @@ class SkySensitivity(DeterSensitivityCurve):
         elif ave=='prob':
             if prob_kwargs['fidx'] is None:
                 raise ValueError('fidx must be set!')
-            return self._fdp_angle_averaged(F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+            if prob_kwargs['int_method'] == 'dblquad':
+                return self._fdp_angle_averaged_dblquad(F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+            elif prob_kwargs['int_method'] == 'trapz':
+                return self._fdp_angle_averaged_trapz(prob_kwargs['snr_grid'], F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+            else:
+                raise ValueError('int_method must be dblquad or trapz')
 
     def detection_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None,'fidx':None}):
         '''
@@ -371,25 +376,62 @@ class SkySensitivity(DeterSensitivityCurve):
         in *any* frequency bin.
         
         '''
+        h0s = prob_kwargs['h0']
+        fidxs = np.arange(len(prob_kwargs['fidx']))
         return 1. - np.prod(
             [self.false_dismissal_prob(
                 F_thresh,
                 snr=snr,
                 Npsrs=Npsrs,
                 ave=ave,
-                prob_kwargs={'h0':h0,'fidx':fidx})
-             for h0, fidx in zip(prob_kwargs['h0'],prob_kwargs['fidx'])
+                prob_kwargs={'h0':h0,
+                             'fidx':fidx,
+                             'int_method':prob_kwargs['int_method'],
+                             'snr_grid':prob_kwargs['snr_grid']})
+                    for h0, fidx in zip(h0s,fidxs)
             ],
-            axis=0)
+        axis=0)
 
-    def _fdp_angle_averaged(self, F_thresh, h0, fidx):
+    def _fdp_angle_averaged_dblquad(self, F_thresh, h0, fidx):
         '''
         The angle-averaged false dismissal probablity. See arXiv....
         '''
-        snr = self.SNR(h0,0,0,fidx)
         integrand = lambda psi, iota: np.sin(iota)/np.pi*ss.ncx2.cdf(2*F_thresh, df=4, 
                                                                      nc=self.SNR(h0,iota,psi,fidx).mean()**2)
         return si.dblquad(integrand,0,np.pi,-np.pi/4,np.pi/4)[0]
+
+    def _fdp_angle_averaged_trapz(self, snrs, F_thresh, h0, fidx):
+        '''
+        The angle-averaged false dismissal probablity. See arXiv....
+        '''
+        # define the points for integration
+        iotas = np.linspace(0, np.pi, snrs.shape[0])
+        psis = np.linspace(-np.pi/4, np.pi/4, snrs.shape[1])
+        # 2d array of integrand values
+        Z =  np.sin(iotas)/np.pi*ss.ncx2.cdf(2*F_thresh,
+                                            df=4,
+                                            nc=(h0*snrs[:, :, fidx])**2)
+        # perform the 2D integration using the trapezoidal method twice
+        return np.trapz(np.trapz(Z, iotas, axis=1), psis, axis=0)
+    
+    def sky_ave_SNR_gridded(self, iota, psi, fidxs=None):
+        r'''
+        Calculate signal-to-noise ratio across a grid of iota and psi values.
+        **Note**: This isn't actually SNR but SNR divided by the strain amplitude.
+        This allows the values to be used for any signal value.
+        '''
+        if fidxs is None: # trick so that all the frequencies get used
+            fidxs = np.arange(len(self.freqs))
+        grid = []
+        for i, iot in enumerate(iota):
+            column = []
+            for j, ps in enumerate(psi):
+                column.append(
+                    np.sqrt(self.Tspan/self.S_eff_full(iot, ps)[fidxs,:]).mean(axis=1)
+                    )
+            grid.append(column)
+
+        return np.array(grid)
     
     def _solve_F_given_fap(self, fap0=0.003, Npsrs=None):
         return sopt.fsolve(lambda F :self.fap(F, Npsrs=Npsrs)-fap0, 10)
