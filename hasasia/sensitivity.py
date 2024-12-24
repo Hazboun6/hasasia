@@ -879,7 +879,7 @@ class GWBSensitivityCurve(SensitivityCurve):
                         Agwb, gamma_gwb,
                         log10_gw_rhos,
                         psd_type='powerlaw',
-                        components=20,psr=None):
+                        components=20):
         """
         GWB Fisher Matrix
         Fisher matrix = signal derivative x noise covariance x signal derivative
@@ -911,18 +911,16 @@ class GWBSensitivityCurve(SensitivityCurve):
         # print("FishMat", mathcalF.shape)
         fishers = np.zeros((2,2))
         for i in range(self.S_effIJ.shape[0]):
-            fisher = np.matmul(self.dmu_dbeta_pl_gwb(Agwb,
-                        gamma_gwb), np.matmul(np.diag(self.S_effIJ[i][fidxs]), self.dmu_dbeta_pl_gwb(Agwb,
-                        gamma_gwb).T))
+            fisher = np.matmul(dmu_dbeta, np.matmul(np.diag(self.S_effIJ[i][fidxs]), dmu_dbeta.T))
             fishers = fisher + fishers
         
         return fishers
 
     def GWBFisherUncertainty(self,
-                             Agwb=None, gamma_gwb=None,
-                             log10_gw_rhos=None,
-                             psd_type='powerlaw',
-                             components=20,psr=None):
+                            Agwb=None, gamma_gwb=None,
+                            log10_gw_rhos=None,
+                            psd_type='powerlaw',
+                            components=20):
         """
         GWB Fisher Matrix Uncertainty
         uncertainty of the i'th param is the square root of the the
@@ -932,7 +930,7 @@ class GWBSensitivityCurve(SensitivityCurve):
         mathcalF = self.GWBFisherMatrix(Agwb, gamma_gwb,
                                         log10_gw_rhos,
                                         psd_type=psd_type,
-                                        components=components,psr=psr)
+                                        components=components)
 
         mathcalFinv = np.linalg.inv(mathcalF)
         print("FishMatInv", mathcalF.shape)
