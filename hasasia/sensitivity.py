@@ -5,7 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import scipy.linalg as sl
-import os, pickle
+import os, pickle, h5py
 from astropy import units as u
 import jax.numpy as jnp
 import jax.scipy as jsc
@@ -320,13 +320,17 @@ class Pulsar(object):
     pdist : astropy.quantity, float
         Earth-pulsar distance. Default units is kpc.
 
+    name : str
+        Pulsar name.
+
     """
-    def __init__(self, toas, toaerrs, phi=None, theta=None,
+    def __init__(self, toas, toaerrs, name, phi=None, theta=None,
                  designmatrix=None, N=None, pdist=1.0*u.kpc):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
+        self.name = name
         self.pdist = make_quant(pdist,'kpc')
 
         if N is None:
@@ -346,6 +350,29 @@ class Pulsar(object):
         if not hasattr(self, '_G'):
             self._G = G_matrix(designmatrix=self.designmatrix)
         return self._G
+    
+    def psr_h5(self, dir: str, compress_val: int = 0):
+        """Writes hasasia.pulsar object to HDF5 files
+
+        Args:
+            - dir (str): directory of HDF5 file
+            - compress_val: gzip compression value, ranges from  0 to 9 with
+              0 yielding no compression. Only large arrays such as G, N, and 
+              designmatrix are compressed.
+        """
+        with h5py.File(dir, 'a') as f:
+            hdf5_psr = f.create_group(self.name)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas)
+            hdf5_psr.create_dataset('toaerrs', self.toaerrs.shape, self.toaerrs.dtype, data=self.toaerrs)
+            hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
+            hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
+            hdf5_psr.create_dataset('designmatrix', self.designmatrix.shape, self.designmatrix.dtype, data=self.designmatrix, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            f.flush()
+            
 
 class Spectrum(object):
     """Class to encode the spectral information for a single pulsar.
