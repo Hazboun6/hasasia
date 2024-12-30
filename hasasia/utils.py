@@ -13,6 +13,13 @@ import astropy.constants as c
 __all__ = ['create_design_matrix',
            'fap',
            'pdf_F_signal',
+           '_solve_F0_given_SNR',
+           '_solve_F_given_fap',
+           'strain_and_chirp_mass_to_luminosity_distance',
+           'char_strain_to_strain_amp',
+           'theta_phi_to_SkyCoord',
+           'skycoord_to_Jname',
+           'distance_on_sphere',
            ]
 
 day_sec = 24*3600
