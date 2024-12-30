@@ -310,6 +310,10 @@ class Pulsar(object):
     theta : float
         Ecliptic latitude of pulsar [rad].
 
+    name: str
+        name of pulsar. attempts to name pulsar based off phi, theta.
+        default is 'J0000+0000'.
+
     designmatrix : array
         Design matrix for pulsar's timing model. N_TOA x N_param.
 
@@ -339,7 +343,7 @@ class Pulsar(object):
             except:
                 self.name = 'J0000+0000'
         else:
-            self.name = name
+            self.name = str(name)
         
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
@@ -387,9 +391,9 @@ class Pulsar(object):
         Parameters
         ==========
         start_time - float
-            MJD at which to begin altared cadence.
+            MJD at which to begin altered cadence.
         end_time - float
-            MJD at which to end altared cadence.
+            MJD at which to end altered cadence.
         cadence - float
             cadence for the modified campaign [toas/year]
         cadence_facter - float
@@ -440,7 +444,7 @@ class Pulsar(object):
             campaign_toas += np.random.uniform(-dt, dt, size=campaign_Ntoas)
         self.toas = np.concatenate([old_toas[mask_before], campaign_toas, old_toas[mask_after]])
         campaign_toaerrs = np.median(old_toaerrs)*np.ones(campaign_Ntoas)
-        # FIXME can only use a fixed toaerr for the duration of the campaign
+        # TODO can only use a fixed toaerr for the duration of the campaign
         #self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
         self.toaerrs = np.ones(len(self.toas))*old_toaerrs[0]
         print(f"old: {len(old_toaerrs)}, new: {len(self.toaerrs)}")
@@ -469,11 +473,11 @@ class Pulsar(object):
         Parameters
         ==========
         start_time - float
-            MJD at which to begin altared cadence.
+            MJD at which to begin altered toa errors.
         end_time - float
-            MJD at which to end altared cadence.
+            MJD at which to end altered toa errors.
         new_sigma - float
-            unvertainty of toas for the modified campaign [microseconds]
+            uncertainty of toas for the modified campaign [microseconds]
         sigma_facter - float
             (instead of sigmas) factor by which to modify the campaign sigmas.
         uneven - bool
