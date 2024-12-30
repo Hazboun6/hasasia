@@ -12,6 +12,7 @@ import astropy.constants as c
 
 __all__ = ['create_design_matrix',
            'fap',
+           'pdf_F_signal',
            ]
 
 day_sec = 24*3600
@@ -70,6 +71,47 @@ def create_design_matrix(toas, RADEC=False, PROPER=False, PX=False):
             designmatrix[:,ii] = np.cos(4*np.pi/yr_sec*toas)
 
     return designmatrix
+
+def fap(F, Npsrs=None):
+    '''
+    False alarm probability of the F-statistic
+    Use None for the Fe statistic and the number of pulsars for the Fp stat.
+    '''
+    if Npsrs is None:
+        N = [0,1]
+    elif isinstance(Npsrs,int):
+        N = np.arange((4*Npsrs)/2-1, dtype=float)
+    # else:
+    #     raise ValueError('Npsrs must be an integer or None (for Fe)')
+    return np.exp(-F)*np.sum([(F**k)/np.math.factorial(k) for k in N])
+
+def pdf_F_signal(F, snr, Npsrs=None):
+    """
+    Probability density of the F-statistic with a signal present.
+    
+    F - float
+        The F-statistic value.
+    snr - float
+        The signal-to-noise ratio of the signal.
+    Npsrs - int, None
+        Use None for the Fe statistic and the number of pulsars for the Fp stat.
+    """
+    if Npsrs is None:
+        N = 4
+    elif isinstance(Npsrs,int):
+        N = int(4 * Npsrs)
+    return ss.ncx2.pdf(2*F, N, snr**2)
+
+def _solve_F_given_fap(fap0=0.003, Npsrs=None):
+    return sopt.fsolve(lambda F :fap(F, Npsrs=Npsrs)-fap0, 10)
+
+def _solve_F0_given_SNR(snr=3, Npsrs=None):
+    '''
+    Returns the F0 (Fe stat threshold for a specified SNR)
+    Use None for the Fe and the number of pulsars for the Fp stat.
+    '''
+    Npsrs = 1 if Npsrs is None else Npsrs 
+    return 0.5*(4.*Npsrs+snr**2.)
 
 def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
     r'''
