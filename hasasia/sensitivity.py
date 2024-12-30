@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import jax.scipy as jsc
 
 import hasasia
-from .utils import create_design_matrix
+from .utils import create_design_matrix, theta_phi_to_SkyCoord, skycoord_to_Jname
 
 current_path = os.path.abspath(hasasia.__path__[0])
 sc_dir = os.path.join(current_path,'sensitivity_curves/')
@@ -333,6 +333,14 @@ class Pulsar(object):
         self.A_rn = A_rn
         self.alpha = alpha
 
+        if name is None:
+            try:
+                self.name = skycoord_to_Jname(theta_phi_to_SkyCoord(theta,phi))
+            except:
+                self.name = 'J0000+0000'
+        else:
+            self.name = name
+        
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
         else:
@@ -558,6 +566,12 @@ class Spectrum(object):
         self.pdist = psr.pdist
         self.tm_fit = tm_fit
         self.Tf_kwargs = Tf_kwargs
+
+        try:
+            self.name = psr.name
+        except AttributeError:
+            self.name = 'J0000+0000'
+
         if freqs is None:
             f0 = 1 / get_Tspan([psr])
             if fmin is None:
@@ -590,6 +604,7 @@ class Spectrum(object):
 
     @property
     def Tf(self):
+        """Transmission function"""
         if not hasattr(self, '_Tf'):
             self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
                                   toas=self.toas, N=self.N,
@@ -778,17 +793,32 @@ class SensitivityCurve(object):
         return self._h_c
 
     @property
-    def Omega_gw(self):
-        """Energy Density sensitivity"""
+    def Omega_gw(self, H_0=None):
+        """Energy Density sensitivity
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value."""
         self._Omega_gw = ((2*np.pi**2/3) * self.freqs**3 * self.S_eff
-                           / self._H_0.to('Hz').value**2)
+                           / self.H_0(H_0).to('Hz').value**2)
         return self._Omega_gw
+   
+    @property
+    def hsq_Omega_gw(self, H_0=None):
+        """
+        Energy Density sensitivity
+        Uses a common convention for energy density: h^2 * Omega_gw
+        where h^2 is the dimensionless Hubble constant squared.
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value.
+        """
+        return self.Omega_gw(H_0) * (self.H_0(H_0)/(100*u.km/u.Mpc/u.s))**2
 
     @property
-    def H_0(self):
+    def H_0(self, H_0=None):
         """Hubble Constant. Assumed to be in units of km /(s Mpc) unless
-        supplied as an `astropy.quantity`. """
-        self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
+        supplied as an `astropy.quantity`.
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value."""
+        if H_0 is not None:
+            self._H_0 = (make_quant(H_0,'km /(s Mpc)'))
+        else:
+            self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
         return self._H_0
 
 
