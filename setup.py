@@ -16,6 +16,10 @@ requirements = ['numpy',
                 'astropy',
                 'jaxlib',
                 'jax',
+                'healpy',
+                'os',
+                'pickle',
+                'itertools',
                 ]
 
 setup(
