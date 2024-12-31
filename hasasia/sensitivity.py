@@ -169,9 +169,9 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
         else:
             G = Gmatrix
         m = G.shape[1]
-        Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
-        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
-        Tmat = jnp.matmul(np.conjugate(Gtilde),Gtilde.T)/N_TOA
+        Gtilde = jnp.zeros((ff.size, G.shape[1]), dtype=jnp.complex128)
+        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G).astype(jnp.complex128)
+        Tmat = jnp.matmul(jnp.conjugate(Gtilde),Gtilde.T)/N_TOA
         if twofreqs:
             Tmat = np.real(Tmat)
         else:
