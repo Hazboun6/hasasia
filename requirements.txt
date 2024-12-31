@@ -4,7 +4,4 @@ astropy>=3.0
 jaxlib
 jax
 healpy
-os
-pickle
-itertools
 
