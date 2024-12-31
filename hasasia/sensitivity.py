@@ -814,7 +814,6 @@ class SensitivityCurve(object):
         """
         return self.Omega_gw(H_0) * (self.H_0(H_0)/(100*u.km/u.Mpc/u.s))**2
 
-    @property
     def H_0(self, H_0=None):
         """Hubble Constant. Assumed to be in units of km /(s Mpc) unless
         supplied as an `astropy.quantity`.

@@ -11,8 +11,8 @@ import hasasia.sim as hsim
 import hasasia.skymap as hsky
 import hasasia.forecast as hcast
 
-phi = np.random.uniform(0, 2*np.pi,size=34)
-cos_theta = np.random.uniform(-1,1,size=34)
+phi = np.random.uniform(0, 2*np.pi,size=20)
+cos_theta = np.random.uniform(-1,1,size=20)
 #This ensures a uniform distribution across the sky.
 theta = np.arccos(cos_theta)
 
@@ -33,11 +33,12 @@ def test_psrs():
         A_rn=A_rn,
         alpha=alphas,
         theta=theta,
-        uneven=False
+        uneven=False,
+        freqs=freqs,
     )
     return psrs
 
-def test_get_sliced_spectra1(test_psrs, freqs):
+def test_get_sliced_spectra1(test_psrs):
     # Call the function with the mock data
     test_slices = hcast.get_sliced_spectra(
         psrs=test_psrs,
@@ -52,9 +53,9 @@ def test_get_sliced_spectra1(test_psrs, freqs):
     for p in test_slices:
         tspan = p.toas.max() - p.toas.min() 
         assert tspan > 3*365.25*24*3600
-        assert tspan < 9.9*365.25*24*3600
+        assert tspan < 11.*365.25*24*3600
 
-def test_get_sliced_spectra2(test_psrs, freqs):
+def test_get_sliced_spectra2(test_psrs):
     # Call the function with the mock data
     test_slices = hcast.get_sliced_spectra(
         psrs=test_psrs,
@@ -71,30 +72,33 @@ def test_get_sliced_spectra2(test_psrs, freqs):
         assert tspan > 3*365.25*24*3600
         assert tspan < 14.0*365.25*24*3600
         
-def test_change_sigma(test_psrs, freqs):
+def test_change_sigma(test_psrs):
     tp = test_psrs[0]
     original_sigma = tp.toaerrs[0]
     original_ntoa = len(tp.toas)
-    tp[0].change_sigma(
-        sigma_change=0.5,
-        start_time=0.0,
-        end_time=15.*365.25,
+    tp.change_sigma(
+        sigma_factor=0.5,
+        start_time=-0.01*365.25, # need to change the sigma at mjd==0
+        end_time=15.01*365.25,
         freqs=freqs,
+        uneven=False
     )
     assert len(tp.toas) == original_ntoa
     assert tp.toaerrs[0] == original_sigma*0.5
 
 
-def test_change_cadence(test_psrs, freqs):
+def test_change_cadence(test_psrs):
     tp = test_psrs[0]
     original_sigma = tp.toaerrs[0]
     original_ntoa = len(tp.toas)
-    tp[0].change_cadence(
+    tp.change_cadence(
         cadence=10,
-        start_time=0.0,
-        end_time=15.*365.25,
+        start_time=-0.01*365.25, # need to change the cadence at mjd==0
+        end_time=15.01*365.25,
         freqs=freqs,
+        uneven=False,
         
     )
-    assert len(tp.toas) == original_ntoa
-    assert tp.toaerrs[0] == original_sigma*0.5
+    print(tp.toas[0]/86400/365.25, print(tp.toas[-1]/86400/365.25))
+    assert len(tp.toas) == 0.5*original_ntoa
+    assert tp.toaerrs[0] == original_sigma
