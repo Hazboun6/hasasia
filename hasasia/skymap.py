@@ -197,6 +197,8 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
+        if iota is None and psi is None:
+            raise ValueError('Must specify sky angle with `*_full`. Use `S_eff` for angle averaged sensitivity.')
         if iota is None and psi is not None:
             raise NotImplementedError('Currently cannot marginalize over inclination but not phase.') 
         Ap_sqr = (1 + np.cos(iota)**2)**2 # (0.5 * (1 + np.cos(iota)**2))**2
@@ -593,43 +595,42 @@ class SkySensitivity(DeterSensitivityCurve):
                 self._S_eff_mean = 1.0 / (12./5 * mean_sky)
         return self._S_eff_mean
 
+    def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
+        r"""
+        Calculates the detection volume of the PTA
+        at a given frequency or list of frequencies.
 
-def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
-    r"""
-    Calculates the detection volume of the PTA
-    at a given frequency or list of frequencies.
-
-    Parameters
-    ----------
-    
-    f0 : float
-        the frequency [Hz] at which to calculate detection volume
+        Parameters
+        ----------
         
-    SNR_threshold : float
-        the signal to noise to referene detection volume to
+        f0 : float
+            the frequency [Hz] at which to calculate detection volume
+            
+        SNR_threshold : float
+            the signal to noise to referene detection volume to
 
-    M_c : float
-        the chirp mass [Msun] at which to reference detection volume
+        M_c : float
+            the chirp mass [Msun] at which to reference detection volume
 
-    Returns
-    -------
-    
-    volume : float
-        the detection volume in Mpc^3
+        Returns
+        -------
+        
+        volume : float
+            the detection volume in Mpc^3
 
-    """
-    NSIDE = hp.pixelfunc.npix2nside(self.S_eff.shape[1])
-    dA = hp.pixelfunc.nside2pixarea(NSIDE, degrees=False)
-    if isinstance(f0, (int,float)):
-        f_idx = np.array([np.argmin(abs(self.freqs - f0))])
-    elif isinstance(f0, (np.ndarray, list)):
-        f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
-    h0 = self.h_thresh(SNR=SNR_threshold)
-    # detection volume is one-third the sum of detection radius * pixel area over all pixels
-    volume = [dA/3.*np.sum(
-        strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
-        axis=0).value for fdx in f_idx]
-    return volume[0] if len(volume)==1 else volume
+        """
+        NSIDE = hp.pixelfunc.npix2nside(self.S_eff.shape[1])
+        dA = hp.pixelfunc.nside2pixarea(NSIDE, degrees=False)
+        if isinstance(f0, (int,float)):
+            f_idx = np.array([np.argmin(abs(self.freqs - f0))])
+        elif isinstance(f0, (np.ndarray, list)):
+            f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
+        h0 = self.h_thresh(SNR=SNR_threshold)
+        # detection volume is one-third the sum of detection radius * pixel area over all pixels
+        volume = [dA/3.*np.sum(
+            strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
+            axis=0).value for fdx in f_idx]
+        return volume[0] if len(volume)==1 else volume
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):
