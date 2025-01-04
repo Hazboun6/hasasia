@@ -154,7 +154,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     if freqs is None:
         if fmin is None:
             fmin = f0/5
-        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float128')
+        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float64')
         if exact_astro_freqs:
             ff = np.sort(np.append(ff,[fyr,2*fyr]))
             nf +=2
