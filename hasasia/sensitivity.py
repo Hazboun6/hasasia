@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import jax.scipy as jsc
 
 import hasasia
-from .utils import create_design_matrix
+from .utils import create_design_matrix, theta_phi_to_SkyCoord, skycoord_to_Jname
 
 current_path = os.path.abspath(hasasia.__path__[0])
 sc_dir = os.path.join(current_path,'sensitivity_curves/')
@@ -98,7 +98,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
            freqs=None, exact_astro_freqs = False,
            from_G=True, twofreqs=False, Gmatrix=None):
     """
-    Calculate the transmission function for a given pulsar design matrix, TOAs
+         the transmission function for a given pulsar design matrix, TOAs
     and TOA errors.
 
     Parameters
@@ -154,7 +154,7 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
     if freqs is None:
         if fmin is None:
             fmin = f0/5
-        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float128')
+        ff = np.logspace(np.log10(fmin), np.log10(fmax), nf,dtype='float64')
         if exact_astro_freqs:
             ff = np.sort(np.append(ff,[fyr,2*fyr]))
             nf +=2
@@ -169,9 +169,9 @@ def get_Tf(designmatrix, toas, N=None, nf=200, fmin=None, fmax=2e-7,
         else:
             G = Gmatrix
         m = G.shape[1]
-        Gtilde = np.zeros((ff.size,G.shape[1]),dtype='complex128')
-        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
-        Tmat = jnp.matmul(np.conjugate(Gtilde),Gtilde.T)/N_TOA
+        Gtilde = jnp.zeros((ff.size, G.shape[1]), dtype=jnp.complex64)
+        Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G).astype(jnp.complex64)
+        Tmat = jnp.matmul(jnp.conjugate(Gtilde),Gtilde.T)/N_TOA
         if twofreqs:
             Tmat = np.real(Tmat)
         else:
@@ -310,6 +310,10 @@ class Pulsar(object):
     theta : float
         Ecliptic latitude of pulsar [rad].
 
+    name: str
+        name of pulsar. attempts to name pulsar based off phi, theta.
+        default is 'J0000+0000'.
+
     designmatrix : array
         Design matrix for pulsar's timing model. N_TOA x N_param.
 
@@ -321,14 +325,26 @@ class Pulsar(object):
         Earth-pulsar distance. Default units is kpc.
 
     """
-    def __init__(self, toas, toaerrs, phi=None, theta=None,
-                 designmatrix=None, N=None, pdist=1.0*u.kpc):
+    def __init__(self, toas, toaerrs, phi=None, theta=None, name=None,
+                 designmatrix=None, N=None, pdist=1.0*u.kpc, A_rn=None,
+                 alpha=None,):
         self.toas = toas
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
+        self.name = name
         self.pdist = make_quant(pdist,'kpc')
+        self.A_rn = A_rn
+        self.alpha = alpha
 
+        if name is None:
+            try:
+                self.name = skycoord_to_Jname(theta_phi_to_SkyCoord(theta,phi))
+            except:
+                self.name = 'J0000+0000'
+        else:
+            self.name = str(name)
+        
         if N is None:
             self.N = np.diag(toaerrs**2) #N ==> weights
         else:
@@ -340,6 +356,175 @@ class Pulsar(object):
         else:
             self.designmatrix = designmatrix
 
+    def filter_data(self, start_time=None, end_time=None):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin data subset.
+        end_time - float
+            MJD at which to end data subset.
+
+        Filter data to create a time-slice of overall dataset.
+        Function adapted from enterprise.BasePulsar() class.
+        """
+        if start_time is None and end_time is None:
+            mask = np.ones(self.toas.shape, dtype=bool)
+        else:
+            mask = np.logical_and(self.toas >= start_time * 86400, self.toas <= end_time * 86400)
+
+        self.toas = self.toas[mask]
+        self.toaerrs = self.toaerrs[mask]
+        self.N = self.N[mask, :][:, mask]
+
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        #self.designmatrix = self.designmatrix[mask, :]
+        #dmx_mask = np.sum(self.designmatrix, axis=0) != 0.0
+        #self.designmatrix = self.designmatrix[:, dmx_mask]
+        self._G = G_matrix(designmatrix=self.designmatrix)
+
+    def change_cadence(self, start_time=0, end_time=1_000_000,
+                       cadence=None, cadence_factor=4, uneven=False, 
+                       A_gwb=None, alpha_gwb=-2/3., freqs=None,
+                       fast=True,):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin altered cadence.
+        end_time - float
+            MJD at which to end altered cadence.
+        cadence - float
+            cadence for the modified campaign [toas/year]
+        cadence_facter - float
+            (instead of cadence) factor by which to modify the old cadence.
+        uneven - bool
+            whether or not to evenly space observation epochs
+        A_gwb - float
+            amplitude of injected gwb self-noise
+        alpha_gwb - float
+            spectral index of injected gwb self-noise.
+            note that this is residual space spectral index.
+        freqs - array
+            frequencies to construct the gwb noise and intrinsic noise
+        fast - bool
+            faster but slightly less accurate method to calculate noise injected in N.
+
+        Change observing cadence in a given time range.
+        Recalculate pulsar noise properties.
+        """
+        mask_before = self.toas <= start_time * 86400
+        mask_after = self.toas >= end_time * 86400
+        old_Ntoas = np.sum(
+                    np.logical_and(self.toas >= start_time * 86400,
+                                    self.toas <= end_time * 86400)
+                )
+        # store the old toas and errors
+        old_toas = self.toas
+        old_toaerrs = self.toaerrs
+        # calculate old cadence then modified cadence
+        if start_time < min(old_toas)/84600:
+            start_time = min(old_toas)/84600
+        if end_time < min(old_toas)/84600:
+            print("trying to change non-existant campaign")
+            return 0
+        duration = end_time - start_time # in MJD
+        old_cadence = old_Ntoas / duration * 365.25 # cad is Ntoas/year
+        if cadence is not None:
+            new_cadence = cadence
+        else:
+            new_cadence = old_cadence * cadence_factor
+        # create new toas and toa errors
+        campaign_Ntoas = int(np.floor( duration / 365.25 * new_cadence ))
+        campaign_toas = np.linspace(start_time, end_time, campaign_Ntoas) * 86400
+        if uneven:
+            # FIXME check this with jeff to see what he was going for
+            # in sim_pta()
+            dt = duration / campaign_Ntoas / 8 * yr_sec
+            campaign_toas += np.random.uniform(-dt, dt, size=campaign_Ntoas)
+        self.toas = np.concatenate([old_toas[mask_before], campaign_toas, old_toas[mask_after]])
+        campaign_toaerrs = np.median(old_toaerrs)*np.ones(campaign_Ntoas)
+        # TODO can only use a fixed toaerr for the duration of the campaign
+        #self.toaerrs = np.concatenate([old_toaerrs[mask_before], campaign_toaerrs, old_toaerrs[mask_after]])
+        self.toaerrs = np.ones(len(self.toas))*old_toaerrs[0]
+        print(f"old: {len(old_toaerrs)}, new: {len(self.toaerrs)}")
+        # recalculate N, designmatrix, G with new toas
+        N = np.diag(self.toaerrs**2)
+        if self.A_rn is not None:
+            plaw = red_noise_powerlaw(A=self.A_rn,
+                                      alpha=self.alpha,
+                                      freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=self.toas, fast=fast)
+
+        if A_gwb is not None:
+            gwb = red_noise_powerlaw(A=A_gwb,
+                                     alpha=alpha_gwb,
+                                     freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=self.toas, fast=fast)
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        self.N = N
+
+    def change_sigma(self, start_time=0, end_time=1_000_000,
+                       new_sigma=None, sigma_factor=4, uneven=False, 
+                       A_gwb=None, alpha_gwb=-2/3., freqs=None,
+                       fast=True,):
+        """
+        Parameters
+        ==========
+        start_time - float
+            MJD at which to begin altered toa errors.
+        end_time - float
+            MJD at which to end altered toa errors.
+        new_sigma - float
+            uncertainty of toas for the modified campaign [microseconds]
+        sigma_facter - float
+            (instead of sigmas) factor by which to modify the campaign sigmas.
+        uneven - bool
+            whether or not to evenly space observation epochs
+        A_gwb - float
+            amplitude of injected gwb self-noise
+        alpha_gwb - float
+            spectral index of injected gwb self-noise.
+            note that this is residual space spectral index (alpha).
+        freqs - array
+            frequencies to construct the gwb noise and intrinsic noise
+        fast - bool
+            faster but slightly less accurate method to calculate noise injected in N.
+
+        Change observing cadence in a given time range.
+        Recalculate pulsar noise properties.
+        """
+        mask_before = self.toas <= start_time * 86400
+        mask_after = self.toas >= end_time * 86400
+        campaign_mask = np.logical_and(self.toas >= start_time * 86400,
+                                    self.toas <= end_time * 86400)
+        campaign_ntoas = np.sum(campaign_mask)
+        # store the old toa errors
+        toaerrs_campaign = self.toaerrs[campaign_mask]
+        # modify the campaign toa errors
+        if sigma_factor is not None:
+            toaerrs_campaign = sigma_factor * toaerrs_campaign
+        elif sigma_factor is None and new_sigma is not None:
+            toaerrs_campaign = np.ones(campaign_ntoas)*new_sigma
+        self.toaerrs = np.concatenate([self.toaerrs[mask_before], toaerrs_campaign, self.toaerrs[mask_after]])
+        # recalculate N, designmatrix, G with new toas
+        N = np.diag(self.toaerrs**2)
+        if self.A_rn is not None:
+            plaw = red_noise_powerlaw(A=self.A_rn,
+                                      alpha=self.alpha,
+                                      freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=plaw, toas=self.toas, fast=fast)
+
+        if A_gwb is not None:
+            gwb = red_noise_powerlaw(A=A_gwb,
+                                     alpha=alpha_gwb,
+                                     freqs=freqs)
+            N += corr_from_psd(freqs=freqs, psd=gwb, toas=self.toas, fast=fast)
+        self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
+        self._G = G_matrix(designmatrix=self.designmatrix)
+        self.N = N
+    
     @property
     def G(self):
         """Inverse Noise Weighted Transmission Function."""
@@ -385,6 +570,12 @@ class Spectrum(object):
         self.pdist = psr.pdist
         self.tm_fit = tm_fit
         self.Tf_kwargs = Tf_kwargs
+
+        try:
+            self.name = psr.name
+        except AttributeError:
+            self.name = 'J0000+0000'
+
         if freqs is None:
             f0 = 1 / get_Tspan([psr])
             if fmin is None:
@@ -417,6 +608,7 @@ class Spectrum(object):
 
     @property
     def Tf(self):
+        """Transmission function"""
         if not hasattr(self, '_Tf'):
             self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
                                   toas=self.toas, N=self.N,
@@ -584,6 +776,13 @@ class SensitivityCurve(object):
         with open(filepath, "wb") as fout:
             pickle.dump(self, fout)
 
+    def fidx(self,f):
+        """Get the indices of a frequencies in the frequency array."""
+        if isinstance(f, int) or isinstance(f, float):
+            f = np.array([f])
+            f = np.asarray(f)
+        return np.array([np.argmin(abs(ff-self.freqs)) for ff in f])
+
     @property
     def S_eff(self):
         """Strain power sensitivity. """
@@ -598,17 +797,31 @@ class SensitivityCurve(object):
         return self._h_c
 
     @property
-    def Omega_gw(self):
-        """Energy Density sensitivity"""
+    def Omega_gw(self, H_0=None):
+        """Energy Density sensitivity
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value."""
         self._Omega_gw = ((2*np.pi**2/3) * self.freqs**3 * self.S_eff
-                           / self._H_0.to('Hz').value**2)
+                           / self.H_0(H_0).to('Hz').value**2)
         return self._Omega_gw
-
+   
     @property
-    def H_0(self):
+    def hsq_Omega_gw(self, H_0=None):
+        """
+        Energy Density sensitivity
+        Uses a common convention for energy density: h^2 * Omega_gw
+        where h^2 is the dimensionless Hubble constant squared.
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value.
+        """
+        return self.Omega_gw(H_0) * (self.H_0(H_0)/(100*u.km/u.Mpc/u.s))**2
+
+    def H_0(self, H_0=None):
         """Hubble Constant. Assumed to be in units of km /(s Mpc) unless
-        supplied as an `astropy.quantity`. """
-        self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
+        supplied as an `astropy.quantity`.
+        Default value of H_0 is 72 km/s/Mpc -- can supply different value."""
+        if H_0 is not None:
+            self._H_0 = (make_quant(H_0,'km /(s Mpc)'))
+        else:
+            self._H_0 = make_quant(self._H_0,'km /(s Mpc)')
         return self._H_0
 
 
@@ -1028,9 +1241,13 @@ def get_Tspan(psrs):
     """
     Returns the total timespan from a list or arry of Pulsar objects, psrs.
     """
-    last = np.amax([p.toas.max() for p in psrs])
-    first = np.amin([p.toas.min() for p in psrs])
-    return last - first
+    try:
+        last = np.amax([p.toas.max() for p in psrs])
+        first = np.amin([p.toas.min() for p in psrs])
+        tspan = last-first
+    except ValueError:
+        tspan = 0
+    return tspan
 
 def get_TspanIJ(psr1,psr2):
     """
@@ -1194,6 +1411,26 @@ def red_noise_powerlaw(A, freqs, gamma=None, alpha=None):
         ValueError('Must specify one version of spectral index.')
 
     return A**2*(freqs/fyr)**(-gamma)/(12*np.pi**2) * yr_sec**3
+
+def psd_from_background_realization(background_hc, freqs):
+    r"""
+    Calculate the power spectral density with given background strain and frequency binning.
+
+    Parameters
+    ----------
+    background_hc : array
+        Characteristic strain (hc) of background at each frequency.
+
+    freqs : array
+        Frequency bins over which the background is stored.
+
+    Returns
+    -------
+    S_h : array
+        the power spectral density of the background
+    """
+
+    return background_hc**2 / (12 * np.pi**2 * freqs[:,np.newaxis]**3)
 
 def S_h(A, alpha, freqs):
     r"""

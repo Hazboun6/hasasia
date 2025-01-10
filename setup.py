@@ -13,7 +13,11 @@ with open('HISTORY.rst') as history_file:
 
 requirements = ['numpy',
                 'scipy',
-                'astropy',]
+                'astropy',
+                'jaxlib',
+                'jax',
+                'healpy',
+                ]
 
 setup(
     author="Jeffrey S. Hazboun",
