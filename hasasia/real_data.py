@@ -137,3 +137,5 @@ def make_corr(psr):
     J = sl.block_diag(*j)
     corr = np.diag(sigma_sqr) + J
     return corr
+
+print('test')
