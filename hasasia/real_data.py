@@ -5,8 +5,11 @@ import numpy as np
 from astropy import units as u
 import jax.numpy as jnp
 import jax.scipy as jsc
+import glob
+import hasasia.sensitivity as hsen
+from enterprise.pulsar import Pulsar as ePulsar
 
-import hasasia as hsen
+fyr = 1/(365.25*24*3600)
 
 def corr_from_psd_chromatic(freqs, psd, toas, obs_freqs, chr_idx, fref=1400., fast=True):
      """
@@ -78,6 +81,20 @@ def get_rednoise_freqs(psr, nmodes, Tspan=None):
 
     return Ffreqs
 
+def get_psrname(file,name_sep='_'):
+    return (file.split('/')[-1].split(name_sep)[0]).split(".")[0]
+
+def create_ePsrs(pars, tims):
+    """
+    code to create ePsrs from pars and tims
+    """
+    ePsrs = []
+    for par,tim in zip(pars, tims):
+        ePsr = ePulsar(par, tim , ephem='DE440')
+        ePsrs.append(ePsr)
+    return ePsrs
+
+
 def create_fourier_design_matrix(t, nmodes, Tspan=None):
     """
     Construct fourier design matrix from eq 11 of Lentati et al, 2013
@@ -111,7 +128,7 @@ def get_noise_basis(epsr, toas, nmodes=100):
     Fmat = create_fourier_design_matrix(t, nmodes)
     return Fmat * D[:, None]
 
-def make_corr(psr):
+def make_corr(psr, noise):
     N = psr.toaerrs.size
     corr = np.zeros((N,N))
     _, _, fl, _, bi = hsen.quantize_fast(psr.toas,psr.toaerrs,
@@ -228,7 +245,7 @@ def hgw_calc(spectra, fyr):
     return hgw, plaw_h
 
 
-def noise_mod(ePsrs, noise, freqs, dm=False, chrom=False):
+def noise_corr(ePsrs, noise, freqs, dm=False, chrom=False):
     thin = 1
     rn_psrs = get_red_noise(noise, 'red_noise')
     dm_n_psrs = get_red_noise(noise, 'dm_gp')
@@ -274,3 +291,33 @@ def noise_mod(ePsrs, noise, freqs, dm=False, chrom=False):
         psr.name = ePsr.name
         psrs.append(psr)
     return psrs
+
+
+def calc_pta_gw(parpath, timpath, psrlist, noise, dm=False, chrom=False):
+    """
+    function to calculate the hgw for mpta
+    Input:
+    pars, tims, 
+
+    Output:
+    hgw
+    
+    """
+    pars = sorted(glob.glob(parpath+'*.par'))
+    tims = sorted(glob.glob(timpath+'*.tim'))
+
+    pars = [f for f in pars if get_psrname(f) in psrlist]
+    tims = [f for f in tims if get_psrname(f) in psrlist]
+
+
+    ePsrs = create_ePsrs(pars, tims)
+
+    Tspan = hsen.get_Tspan(ePsrs)
+    freqs = np.logspace(np.log10(1/(5*Tspan)),np.log10(4e-7),600)
+
+    psr = noise_corr(ePsrs, noise, freqs, dm, chrom)
+    specs = [hsen.Spectrum(p, freqs=freqs) for p in psr]
+    pta = hsen.GWBSensitivityCurve(specs)
+    hgw, plaw_h= hgw_calc(pta, fyr)
+    print('hgw = ', hgw)
+    return specs, pta, hgw
