@@ -71,12 +71,10 @@ def corr_from_psd_chromatic(freqs, psd, toas, obs_freqs, chr_idx, fref=1400., fa
          integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
          return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
-def get_rednoise_freqs(psr, nmodes, Tspan=None):
+def get_rednoise_freqs(nmodes, Tspan=None):
     """Frequency components for creating the red noise basis matrix."""
 
-    T = Tspan if Tspan is not None else psr.toas.max() - psr.toas.min()
-
-    f = np.linspace(1 / T, nmodes / T, nmodes)
+    f = np.linspace(1 / Tspan, nmodes / Tspan, nmodes)
 
     Ffreqs = np.zeros(2 * nmodes)
     Ffreqs[::2] = f
@@ -98,26 +96,63 @@ def create_ePsrs(pars, tims):
     return ePsrs
 
 
-def create_fourier_design_matrix(t, nmodes, Tspan=None):
+def create_fourier_design_matrix(toas, nmodes, Tspan=None):
     """
     Construct fourier design matrix from eq 11 of Lentati et al, 2013
 
-    :param t: vector of time series in seconds
+    :param toas: vector of time series in seconds
     :param nmodes: number of fourier coefficients to use
     :param Tspan: option to some other Tspan
     :return: F: fourier design matrix
     :return: f: Sampling frequencies
     """
 
-    N = len(t)
+    N = len(toas)
     F = np.zeros((N, 2 * nmodes))
 
-    Ffreqs = get_rednoise_freqs(ePsr, nmodes, Tspan=Tspan)
+    Ffreqs = get_rednoise_freqs(nmodes=nmodes, Tspan=Tspan)
 
-    F[:, ::2] = np.sin(2 * np.pi * t[:, None] * Ffreqs[::2])
-    F[:, 1::2] = np.cos(2 * np.pi * t[:, None] * Ffreqs[1::2])
+    F[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
+    F[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
 
     return F
+
+def create_fourier_design_matrix_chromatic(toas, radio_freqs, nmodes, Tspan=None, chrom_idx=4., fref=1400.):
+    """
+    Construct fourier design matrix from eq 11 of Lentati et al, 2013
+
+    :param toas: vector of time series in seconds
+    :param nmodes: number of fourier coefficients to use
+    :param Tspan: option to some other Tspan
+    :return: Fmat: chromatic Fourier design matrix
+    :return: Ffreqs: Sampling frequencies
+    """
+
+    N = len(toas)
+    Fmat = np.zeros((N, 2 * nmodes))
+
+    Ffreqs = get_rednoise_freqs(nmodes=nmodes, Tspan=Tspan)
+    D = (fref / radio_freqs) ** chrom_idx
+
+    Fmat[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
+    Fmat[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
+
+    return Fmat * D[:, None], Ffreqs
+
+def create_fourier_design_matrix_dm(toas, nmodes, Tspan=None):
+    """
+    Construct fourier design matrix from eq 11 of Lentati et al, 2013
+
+    :param toas: vector of time series in seconds
+    :param nmodes: number of fourier coefficients to use
+    :param Tspan: option to some other Tspan
+    :return: F: fourier design matrix
+    :return: f: Sampling frequencies
+    """
+    Fmat_dm = create_fourier_design_matrix_chromatic(toas=toas, nmodes=nmodes, Tspan=Tspan, chrom_idx=2.0)
+
+    return Fmat_dm
+
 
 def get_noise_basis(epsr, toas, nmodes=100):
     """Return a Fourier design matrix for DM noise.
