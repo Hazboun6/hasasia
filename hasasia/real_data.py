@@ -8,71 +8,15 @@ import jax.numpy as jnp
 import jax.scipy as jsc
 import glob
 import hasasia.sensitivity as hsen
-from enterprise.pulsar import Pulsar as ePulsar
 
 fyr = 1/(365.25*24*3600)
 
 
 ## could add a thinning here to make it faster.
-def corr_from_psd_chromatic(freqs, psd, toas, obs_freqs, chr_idx, fref=1400., fast=True):
-     """
-     Calculates the correlation matrix over a set of TOAs for a given power
-     spectral density.
 
-     Parameters
-     ----------
 
-     freqs : array
-         Array of freqs over which the psd is given.
-
-     psd : array
-         Power spectral density to use in calculation of correlation matrix.
-
-     toas : array
-         Pulsar times-of-arrival to use in correlation matrix.
-     
-     obs_freqs : array
-         observation frequency of each ToA
-         
-     chr_idx : float
-         Spectral index of the powerlaw amplitude. 2 for DM noise, 4 for Chrom.
-         
-     fref: float, optional
-         reference frequency for amplitude powerlaw. Usually set to 1400 MHz
-
-     fast : bool, optional
-         Fast mode uses a matix inner product, while the slower mode uses the
-         numpy.trapz function which is slower, but more accurate.
-
-     Returns
-     -------
-
-     corr : array
-         A 2-dimensional array which represents the correlation matrix for the
-         given set of TOAs.
-     """
-
-     N_toa = len(toas)
-     matrix = np.ones((N_toa,N_toa))
-
-     for i in range(N_toa):
-         matrix[i,:] = (fref/obs_freqs[i])**chr_idx
-     A_matrix = matrix*matrix.transpose()
-
-     if fast:
-         df = np.diff(freqs)
-         df = np.append(df,df[-1])
-         tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
-         integrand = np.matmul(tm, np.conjugate(tm.T))
-         return A_matrix*np.real(integrand)
-     else: #Makes much larger arrays, but uses np.trapz
-         t1, t2 = np.meshgrid(toas, toas, indexing='ij')
-         tm = np.abs(t1-t2)
-         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-         return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
-
-def get_rednoise_freqs(nmodes, Tspan=None):
-    """Frequency components for creating the red noise basis matrix."""
+def get_fourier_freqs(nmodes, Tspan=None):
+    """Frequency components for creating the fourier basis design matrices."""
 
     f = np.linspace(1 / Tspan, nmodes / Tspan, nmodes)
 
@@ -82,21 +26,12 @@ def get_rednoise_freqs(nmodes, Tspan=None):
 
     return Ffreqs
 
+
 def get_psrname(file,name_sep='_'):
     return (file.split('/')[-1].split(name_sep)[0]).split(".")[0]
 
-def create_ePsrs(pars, tims):
-    """
-    code to create ePsrs from pars and tims
-    """
-    ePsrs = []
-    for par,tim in zip(pars, tims):
-        ePsr = ePulsar(par, tim , ephem='DE440')
-        ePsrs.append(ePsr)
-    return ePsrs
 
-
-def create_fourier_design_matrix(toas, nmodes, Tspan=None):
+def create_fourier_design_matrix_achromatic(toas, nmodes, Tspan=None):
     """
     Construct fourier design matrix from eq 11 of Lentati et al, 2013
 
@@ -108,14 +43,14 @@ def create_fourier_design_matrix(toas, nmodes, Tspan=None):
     """
 
     N = len(toas)
-    F = np.zeros((N, 2 * nmodes))
+    Fmat_red = np.zeros((N, 2 * nmodes))
 
-    Ffreqs = get_rednoise_freqs(nmodes=nmodes, Tspan=Tspan)
+    Ffreqs = get_fourier_freqs(nmodes=nmodes, Tspan=Tspan)
 
-    F[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
-    F[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
+    Fmat_red[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
+    Fmat_red[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
 
-    return F
+    return Fmat_red
 
 def create_fourier_design_matrix_chromatic(toas, radio_freqs, nmodes, Tspan=None, chrom_idx=4., fref=1400.):
     """
@@ -131,11 +66,10 @@ def create_fourier_design_matrix_chromatic(toas, radio_freqs, nmodes, Tspan=None
     N = len(toas)
     Fmat = np.zeros((N, 2 * nmodes))
 
-    Ffreqs = get_rednoise_freqs(nmodes=nmodes, Tspan=Tspan)
+    Ffreqs = get_fourier_freqs(nmodes=nmodes, Tspan=Tspan)
     D = (fref / radio_freqs) ** chrom_idx
 
-    Fmat[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
-    Fmat[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
+    create_fourier_design_matrix_achromatic(toas=toas, nmodes=nmodes, Tspan=Tspan)
 
     return Fmat * D[:, None], Ffreqs
 
@@ -152,19 +86,6 @@ def create_fourier_design_matrix_dm(toas, nmodes, Tspan=None):
     Fmat_dm = create_fourier_design_matrix_chromatic(toas=toas, nmodes=nmodes, Tspan=Tspan, chrom_idx=2.0)
 
     return Fmat_dm
-
-
-def get_noise_basis(epsr, toas, nmodes=100):
-    """Return a Fourier design matrix for DM noise.
-
-    See the documentation for pl_dm_basis_weight_pair function for details."""
-
-    tbl = toas.table
-    t = (tbl["tdbld"].quantity * u.day).to(u.s).value
-    fref = 1400 * u.MHz
-    D = (fref.value / epsr.freqs) ** 2
-    Fmat = create_fourier_design_matrix(t, nmodes)
-    return Fmat * D[:, None]
 
 def white_noise_corr(psr,
                     noise_dict,
@@ -231,46 +152,100 @@ def white_noise_corr(psr,
         corr = np.diag(sigma_sqr)
     return corr
 
-def corr_from_psd_dm(freqs, psd, toas, v_freqs, fast=True):
-    """
-    Calculates the correlation matrix over a set of TOAs for a given power
-    spectral density.
+def corr_from_psd_chromatic(toas, radio_freqs, freqs, psd, chromatic_idx, fref=1400., fast=True):
+     """
+     Calculates the correlation matrix over a set of TOAs for a given power
+     spectral density.
 
-    Parameters
-    ----------
+     Parameters
+     ----------
+     
+     toas : array
+         Pulsar times-of-arrival to use in correlation matrix.
 
-    freqs : array
-        Array of freqs over which the psd is given.
+     radio_freqs : array
+         observation frequency of each ToA
 
-    psd : array
-        Power spectral density to use in calculation of correlation matrix.
+     freqs : array
+         Array of freqs over which the psd is given.
+
+     psd : array
+         Power spectral density to use in calculation of correlation matrix.
+
+    chromatic_idx : float
+         Spectral index of the powerlaw amplitude. 2 for DM noise, 4 for Chrom.
+
+     fref: float, optional
+         reference frequency for amplitude powerlaw. Usually set to 1400 MHz
+
+     fast : bool, optional
+         Fast mode uses a matix inner product, while the slower mode uses the
+         numpy.trapz function which is slower, but more accurate.
+
+     Returns
+     -------
+
+     corr : array
+         A 2-dimensional array which represents the correlation matrix for the
+         given set of TOAs.
+     """
+
+     N_toa = len(toas)
+     matrix = np.ones((N_toa,N_toa))
+
+     for i in range(N_toa):
+         matrix[i,:] = (fref/radio_freqs[i])**chromatic_idx
+     A_matrix = matrix*matrix.transpose()
+
+     if fast:
+         df = np.diff(freqs)
+         df = np.append(df,df[-1])
+         tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+         integrand = np.matmul(tm, np.conjugate(tm.T))
+         return A_matrix*np.real(integrand)
+     else: #Makes much larger arrays, but uses np.trapz
+         t1, t2 = np.meshgrid(toas, toas, indexing='ij')
+         tm = np.abs(t1-t2)
+         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+         return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+
+
+def corr_from_psd_dm(toas, radio_freqs, freqs, psd, fref=1400., fast=True):
+     """
+     Calculates the correlation matrix over a set of TOAs for a given power
+     spectral density.
+     Wrapper around `corr_from_psd_chromatic` with `chromatic_index=2`.
+
+     Parameters
+     ----------
 
     toas : array
-        Pulsar times-of-arrival to use in correlation matrix.
+         Pulsar times-of-arrival to use in correlation matrix.
 
-    fast : bool, optional
-        Fast mode uses a matix inner product, while the slower mode uses the
-        numpy.trapz function which is slower, but more accurate.
+     radio_freqs : array
+         observation frequency of each ToA
 
-    Returns
-    -------
+     freqs : array
+         Array of freqs over which the psd is given.
 
-    corr : array
-        A 2-dimensional array which represents the correlation matrix for the
-        given set of TOAs.
-    """
-    if fast:
-        df = np.diff(freqs)
-        df = np.append(df,df[-1])
-        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])*(v_freqs[:,np.newaxis]/1400)**(-2)
-        integrand = np.matmul(tm, np.conjugate(tm.T))
-        return np.real(integrand)
-    else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
-        v1, v2 = np.meshgrid(v_freqs, v_freqs, indexing='ij')
-        tm = np.abs(t1-t2)
-        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])*(v1[:,:,np.newaxis]**-2)*(v2[:,:,np.newaxis]**-2)
-        return np.trapz(integrand, axis=2, x=freqs)
+     psd : array
+         Power spectral density to use in calculation of correlation matrix.
+
+     fref: float, optional
+         reference frequency for amplitude powerlaw. Usually set to 1400 MHz
+
+     fast : bool, optional
+         Fast mode uses a matix inner product, while the slower mode uses the
+         numpy.trapz function which is slower, but more accurate.
+
+     Returns
+     -------
+
+     corr : array
+         A 2-dimensional array which represents the correlation matrix for the
+         given set of TOAs.
+     """
+     return corr_from_psd_chromatic(toas=toas, radio_freqs=radio_freqs, freqs=freqs, psd=psd, chr_idx=2.0, fref=fref, fast=fast)
 
 
 def get_red_noise(noise, noise_tag):
@@ -322,6 +297,36 @@ def hgw_calc(spectra, fyr):
 
 
 def make_corr(ePsr, noise, freqs, dm=False, chrom=False, thin=1, A_gwb=1e-16, gamma_gwb=13/3.):
+    """
+    function to make the correlation matrix for a pulsar
+    Parameters
+    ----------
+    ePsr : enterprise.pulsar.Pulsar object
+        The pulsar object for which to create the correlation matrix.
+
+    noise : dictionary
+        Dictionary containing noise parameters.
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    dm : bool, optional
+        Option to include dm noise in the correlation matrix.
+
+    chrom : bool, optional
+        Option to include chromatic noise in the correlation matrix.
+
+    thin : int, optional
+        Option to thin the toas for faster calculations.
+        Calculations run faster, but overall sensitivity is reduced as the power in the white nosie is higher.
+    
+    A_gwb : float, optional
+        Amplitude of the GWB
+
+    gamma_gwb : float, optional
+        Spectral index of the GWB
+
+    """
     ePsr.toas = ePsr.toas[::thin]
     ePsr.toaerrs = ePsr.toaerrs[::thin]
     ePsr.Mmat = ePsr.Mmat[::thin,:]
