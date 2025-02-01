@@ -48,8 +48,8 @@ def create_fourier_design_matrix_achromatic(toas, nmodes, Tspan=None):
 
     Ffreqs = get_fourier_freqs(nmodes=nmodes, Tspan=Tspan)
 
-    Fmat_red[:, ::2] = np.sin(2 * np.pi * toas[:, None] * Ffreqs[::2])
-    Fmat_red[:, 1::2] = np.cos(2 * np.pi * toas[:, None] * Ffreqs[1::2])
+    Fmat_red[:, ::2] = jnp.sin(2 * jnp.pi * toas[:, None] * Ffreqs[::2])
+    Fmat_red[:, 1::2] = jnp.cos(2 * jnp.pi * toas[:, None] * Ffreqs[1::2])
 
     return Fmat_red
 
@@ -264,9 +264,9 @@ def white_noise_corr(psr,
         j = [ecorrs[ii]**2*np.ones((len(bucket),len(bucket)))
             for ii, bucket in enumerate(bi)]
         J = sl.block_diag(*j)
-        corr = np.diag(sigma_sqr) + J
+        corr = jnp.diag(sigma_sqr) + J
     elif ecorr_settings is None:
-        corr = np.diag(sigma_sqr)
+        corr = jnp.diag(sigma_sqr)
     return corr
 
 
@@ -318,14 +318,14 @@ def corr_from_psd_chromatic(toas, radio_freqs, freqs, psd, chromatic_idx, fref=1
      if fast:
          df = np.diff(freqs)
          df = np.append(df,df[-1])
-         tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
-         integrand = np.matmul(tm, np.conjugate(tm.T))
-         return A_matrix*np.real(integrand)
+         tm = jnp.sqrt(psd*df)*jnp.exp(1j*2*jnp.pi*freqs*toas[:,np.newaxis])
+         integrand = jnp.matmul(tm, jnp.conjugate(tm.T))
+         return A_matrix*jnp.real(integrand)
      else: #Makes much larger arrays, but uses np.trapz
-         t1, t2 = np.meshgrid(toas, toas, indexing='ij')
-         tm = np.abs(t1-t2)
-         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-         return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+         t1, t2 = jnp.meshgrid(toas, toas, indexing='ij')
+         tm = jnp.abs(t1-t2)
+         integrand = psd*jnp.cos(2*jnp.pi*freqs*tm[:,:,jnp.newaxis])#df*
+         return A_matrix*jnp.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 
 def corr_from_psd_dm(toas, radio_freqs, freqs, psd, fref=1400., fast=True):
@@ -421,14 +421,14 @@ def corr_from_psd_solar_wind(toas, radio_freqs, planetssb, sunssb, pos_t, freqs,
     if fast:
         df = np.diff(freqs)
         df = np.append(df,df[-1])
-        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
-        integrand = np.matmul(tm, np.conjugate(tm.T))
-        return A_matrix*np.real(integrand)
+        tm = jnp.sqrt(psd*df)*jnp.exp(1j*2*jnp.pi*freqs*toas[:,jnp.newaxis])
+        integrand = jnp.matmul(tm, jnp.conjugate(tm.T))
+        return A_matrix*jnp.real(integrand)
     else: #Makes much larger arrays, but uses np.trapz
-        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
-        tm = np.abs(t1-t2)
-        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+        t1, t2 = jnp.meshgrid(toas, toas, indexing='ij')
+        tm = jnp.abs(t1-t2)
+        integrand = psd*jnp.cos(2*jnp.pi*freqs*tm[:,:,jnp.newaxis])#df*
+        return A_matrix*jnp.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 
 def get_noise_values(noise_dict, noise_tag):
@@ -574,7 +574,7 @@ def make_corr(ePsr, noise_dict, freqs,
             Amp, gam = swgp_psrs[ePsr.name]
             key_chrom_idx = '{0}_sw_gp_idx'.format(ePsr.name)
             plaw_chrom = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
-            corr += corr_from_psd_swgp(
+            corr += corr_from_psd_solar_wind(
                 ePsr.toas,
                 ePsr.freqs,
                 freqs,
@@ -603,7 +603,7 @@ def calc_pta_gw(parpath, timpath, psrlist, noise, dm=False, chrom=False):
     ePsrs = create_ePsrs(pars, tims)
 
     Tspan = hsen.get_Tspan(ePsrs)
-    freqs = np.logspace(np.log10(1/(5*Tspan)),np.log10(4e-7),600)
+    freqs = jnp.logspace(jnp.log10(1/(5*Tspan)),jnp.log10(4e-7),600)
 
     psr = noise_corr(ePsrs, noise, freqs, dm, chrom)
     specs = [hsen.Spectrum(p, freqs=freqs) for p in psr]

@@ -244,7 +244,7 @@ def distance_on_sphere(lat1, lon1, lat2, lon2):
     return distance
 
 
-######## solar wind stuff ########
+######## solar wind utils  -- copied from enterprise_extensions.chromatic.solar_wind ########
 
 def _dm_solar_close(n_earth, r_earth):
     return (n_earth * AU_light_sec * AU_pc / r_earth)
