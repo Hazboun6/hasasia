@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import jax.scipy as jsc
 import glob
 import hasasia.sensitivity as hsen
+import hasasia.utils as hutils
 
 fyr = 1/(365.25*24*3600)
 
@@ -87,10 +88,109 @@ def create_fourier_design_matrix_dm(toas, nmodes, Tspan=None):
 
     return Fmat_dm
 
+def create_fourier_design_matrix_solar_dm(toas, radio_freqs, planetssb, sunssb, pos_t,
+                                       modes=None, nmodes=100,
+                                       Tspan=None,):
+    """
+    Construct DM-Solar Model fourier design matrix.
+
+    :param toas: vector of time series in seconds
+    :param planetssb: solar system bayrcenter positions
+    :param pos_t: pulsar position as 3-vector
+    :param nmodes: number of fourier coefficients to use
+    :param freqs: radio frequencies of observations [MHz]
+    :param Tspan: option to some other Tspan
+    :param logf: use log frequency spacing
+    :param fmin: lower sampling frequency
+    :param fmax: upper sampling frequency
+
+    :return: F: SW DM-variation fourier design matrix
+    :return: f: Sampling frequencies
+    """
+
+    # get base fourier design matrix and frequencies
+    Fmat_red, Ffreqs = create_fourier_design_matrix_achromatic(toas, nmodes=nmodes, Tspan=Tspan)
+    # get solar wind dispersion factor
+    dt_DM = hutils.solar_wind_geometric_factor(radio_freqs, planetssb, sunssb, pos_t)
+
+    return Fmat_red * dt_DM[:, None], Ffreqs
+
+### flagging convenience functions for determining white noise. modified from Bjorn Larsen's code ####
+
+def get_flags_by_pta(t=None, psr=None, ecorr=False, ppta_band_ecorr=True):
+    if not isinstance(t, type(None)):
+        flags = t
+        B = 'B'
+    elif not isinstance(psr, type(None)):
+        flags = psr.flags
+        if 'B' in list(flags.keys()):
+            B = 'B'
+        else:
+            B = 'b'
+    else:
+        print('bad input')
+        return None
+    pta_list = list(np.unique(flags['pta']))
+    if ecorr and 'EPTA' in pta_list:
+        pta_list.remove('EPTA')
+    noiseflags = dict.fromkeys(pta_list)
+    for pta in pta_list:
+        try:
+            groups = np.unique(flags['group'][flags['pta'] == pta])
+            try:
+                backends = np.unique(flags['f'][flags['pta'] == pta])
+            except Exception as e:
+                print(f'Exception: {e}')
+                print(f'{pta}: using -group')
+                noiseflags[pta] = 'group'
+            if pta == 'NANOGrav' and 'group' in flags:
+                if np.all(backends == groups):
+                    noiseflags[pta] = 'group'
+                else:
+                    noiseflags[pta] = 'f'
+            elif pta == 'PPTA' and ecorr and ppta_band_ecorr:
+                noiseflags[pta] = B
+            else:
+                if groups[0] == '' and len(groups) == 1:
+                    noiseflags[pta] = 'f'
+                else:
+                    noiseflags[pta] = 'group'
+        except Exception as e:
+            print(f"Exception: {e}")
+            print(f'{pta}: using -f')
+            noiseflags[pta] = 'f'
+    return noiseflags
+
+def noise_flags(noiseflags, t=None, psr=None):
+    pta_list = list(noiseflags.keys())
+    if not isinstance(t, type(None)):
+        return np.concatenate([np.unique(t[noiseflags[pta]][t['pta'] == pta])
+                               for pta in pta_list])
+    elif not isinstance(psr, type(None)):
+        f = psr.flags
+        return np.concatenate([np.unique(f[noiseflags[pta]][f['pta'] == pta])
+                               for pta in pta_list])
+    else:
+        print('bad input')
+        return 0
+
+
+def get_febes(ePsr):
+    """
+    based off which flags are in a pulsar's toas,
+    returns the unified flags for front end / back end
+    """
+    ptas_flgs = get_flags_by_pta(psr=ePsr)
+    msks = [(ePsr.flags['pta']==pta) for pta in ptas_flgs ]
+    flgs = np.concatenate([ePsr.flags[ptas_flgs[pta]][msk] for msk, pta in zip(msks, ptas_flgs)])
+    new_flgs=flgs[np.concatenate([ePsr.toas[msk] for msk in msks]).argsort()]
+    return new_flgs
+
+
 def white_noise_corr(psr,
                     noise_dict,
                     equad_convention='tnequad',
-                    include_ecorr=True):
+                    ecorr_settings='NANOGrav'):
     """
     Function to make white noise correlation matrix.
     Formerly, `make_corr` in the real data tutorial.
@@ -114,43 +214,61 @@ def white_noise_corr(psr,
     corr : array (Ntoa x Ntoa)
         The white noise correlation matrix.
     """
-    ### formally make_corr
+
+    # setup the matrix to be Ntoa x Ntoa
     N = psr.toaerrs.size
     corr = np.zeros((N,N))
-    ### need to finagle some flags here
-    _, _, fl, _, bi = hsen.quantize_fast(psr.toas,psr.toaerrs,
-                                         flags=psr.flags['f'],dt=1)
-    keys = [ky for ky in noise_dict.keys() if psr.name in ky]
-    backends = np.unique(psr.flags['f'])
+    # get the flagging conventions for PTAs
+    flags_by_pta = get_flags_by_pta(psr=psr)
+    # get the unique frontend/backend combinations
+    unique_frontend_backend = noise_flags(flags_by_pta, psr=psr)
+    # create a new flag to use
+    febes = get_febes(psr)
+    # quantize new flag -- i wonder what happens if 2 ptas take measurements at the same time ??
+    _, _, flags_quantized, _, bi = hsen.quantize_fast(psr,febes,dt=0.1, flags_only=True)
     sigma_sqr = np.zeros(N)
-    ecorrs = np.zeros_like(fl,dtype=float)
-    for be in backends:
-        #### FIXME: check the flags
-        mask = np.where(psr.flags['f']==be)
-        key_ef = '{0}_{1}_{2}'.format(psr.name,be,'efac')
-        key_eq = '{0}_{1}_log10_{2}'.format(psr.name,be,equad_convention)
+    ecorrs = np.zeros_like(flags_quantized,dtype=float)
+    # FIXME: try to get rid of the the try/ accept
+    for unique_febe in unique_frontend_backend:
+        mask = np.where(unique_febe==febes)
+        try:
+            key_ef = '{0}_{1}_{2}'.format(psr.name, unique_febe,'efac')
+            efac = noise_dict[key_ef]
+        except KeyError:
+            efac = 1
+            print(f'No efac for {psr.name} {unique_febe}')
+        try:
+            key_eq = '{0}_{1}_log10_{2}'.format(psr.name, unique_febe,'tnequad')
+            equad = 10**noise_dict[key_eq]
+        except KeyError:
+            print(f'No equad for {psr.name} {unique_febe}')
+            equad = 0
         if equad_convention == 'tnequad':
             sigma_sqr[mask] = ( # variance_tn = efac^2 * toaerr^2 + equad^2
-                                noise_dict[key_ef]**2 *
-                            (psr.toaerrs[mask])**2 + (10**noise_dict[key_eq])**2
+                                efac**2 *
+                            (psr.toaerrs[mask])**2 + (10**equad)**2
                             )
         elif equad_convention == 't2equad':
             sigma_sqr[mask] = ( # variance_t2 = efac^2 * (toaerr^2 + equad^2)
-                                noise_dict[key_ef]**2 *
-                            ((psr.toaerrs[mask])**2 + (noise_dict[key_eq])**2)
+                                efac**2 *
+                            ((psr.toaerrs[mask])**2 + (equad)**2)
                             )
-        if include_ecorr:
-            mask_ec = np.where(fl==be)
-            key_ec = '{0}_{1}_log10_{2}'.format(psr.name,be,'ecorr')
-            ecorrs[mask_ec] = np.ones_like(mask_ec) * (10**noise_dict[key_ec])
-    if include_ecorr: # some PTAs don't have ecorr
+        if ecorr_settings is not None:
+            mask_ec = np.where(flags_quantized==unique_febe)
+            try:
+                key_ec = '{0}_{1}_log10_{2}'.format(psr.name,unique_febe,'ecorr')
+                ecorrs[mask_ec] = np.ones_like(mask_ec) * (10**noise_dict[key_ec])
+            except KeyError:
+                print(f'No ecorr for {psr.name} {unique_febe}')
+    if ecorr_settings == 'NANOGrav': # some PTAs don't have ecorr
         j = [ecorrs[ii]**2*np.ones((len(bucket),len(bucket)))
             for ii, bucket in enumerate(bi)]
         J = sl.block_diag(*j)
         corr = np.diag(sigma_sqr) + J
-    else:
+    elif ecorr_settings is None:
         corr = np.diag(sigma_sqr)
     return corr
+
 
 def corr_from_psd_chromatic(toas, radio_freqs, freqs, psd, chromatic_idx, fref=1400., fast=True):
      """
@@ -248,13 +366,78 @@ def corr_from_psd_dm(toas, radio_freqs, freqs, psd, fref=1400., fast=True):
      return corr_from_psd_chromatic(toas=toas, radio_freqs=radio_freqs, freqs=freqs, psd=psd, chr_idx=2.0, fref=fref, fast=fast)
 
 
-def get_red_noise(noise, noise_tag):
+def corr_from_psd_solar_wind(toas, radio_freqs, planetssb, sunssb, pos_t, freqs, psd, fast=True):
+    """
+    Calculates the correlation matrix over a set of TOAs for a given power
+    spectral density. Uses a solar wind basis.
+
+    Parameters
+    ----------
+
+    toas : array
+        Pulsar times-of-arrival to use in correlation matrix.
+
+    radio_freqs : array
+         observation frequency of each ToA
+    
+    planetssb : array
+
+    sunssb : array
+
+    pos_t : array
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    psd : array
+        Power spectral density to use in calculation of correlation matrix.
+
+    chromatic_idx : float
+         Spectral index of the powerlaw amplitude. 2 for DM noise, 4 for Chrom.
+
+    fref: float, optional
+         reference frequency for amplitude powerlaw. Usually set to 1400 MHz
+
+    fast : bool, optional
+         Fast mode uses a matix inner product, while the slower mode uses the
+         numpy.trapz function which is slower, but more accurate.
+
+    Returns
+    -------
+
+    corr : array
+        A 2-dimensional array which represents the correlation matrix for the
+        given set of TOAs.
+    """
+
+    N_toa = len(toas)
+    matrix = np.ones((N_toa,N_toa))
+
+    #  for i in range(N_toa):
+    #      matrix[i,:] = (fref/radio_freqs[i])**chromatic_idx
+    matrix = hutils.solar_wind_geometric_factor(radio_freqs, planetssb, sunssb, pos_t)[:, np.newaxis]
+    A_matrix = matrix*matrix.transpose()
+
+    if fast:
+        df = np.diff(freqs)
+        df = np.append(df,df[-1])
+        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+        integrand = np.matmul(tm, np.conjugate(tm.T))
+        return A_matrix*np.real(integrand)
+    else: #Makes much larger arrays, but uses np.trapz
+        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
+        tm = np.abs(t1-t2)
+        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+
+
+def get_noise_values(noise_dict, noise_tag):
     """
     function to find the red noise value associated with psr
 
     Inputs
     ------
-    noise : string
+    noise_dict : string
         noise file containing noise values for diff psrs
 
     noise_tag : string
@@ -268,21 +451,20 @@ def get_red_noise(noise, noise_tag):
     """
     key_logA = f'{noise_tag}_log10_A'
     key_gamma = f'{noise_tag}_gamma'
-    log10_A_1 = [value for key, value in noise.items() if key_logA in key]
+    log10_A_1 = [value for key, value in noise_dict.items() if key_logA in key]
     log10_A_2 = [10**x for x in log10_A_1]
-    gamma = [value for key, value in noise.items() if key_gamma in key]
-    name = [key for key, value in noise.items() if key_logA in key]
+    gamma = [value for key, value in noise_dict.items() if key_gamma in key]
+    name = [key for key, value in noise_dict.items() if key_logA in key]
     for i in range(len(name)):
         name[i] = name[i].replace(f"_{noise_tag}_log10_A", "")
     values = [list(t) for t in zip(log10_A_2, gamma)]
-    rn_psrs = {}
+    noise_vals = {}
     for i in name:
         for j in values:
-            rn_psrs[i] = j
+            noise_vals[i] = j
             values.remove(j)
             break
-
-    return rn_psrs
+    return noise_vals
 
 def hgw_calc(spectra, fyr):
     """
@@ -296,7 +478,13 @@ def hgw_calc(spectra, fyr):
     return hgw, plaw_h
 
 
-def make_corr(ePsr, noise, freqs, dm=False, chrom=False, thin=1, A_gwb=1e-16, gamma_gwb=13/3.):
+def make_corr(ePsr, noise_dict, freqs,
+              include_achrom_rn_corr=False,
+              include_dmgp_corr=False,
+              include_chromgp_corr=False,
+              include_swgp_corr=False,
+              thin=1, A_gwb=1e-16, gamma_gwb=13/3.,
+              equad_convention='tnequad', ecorr_settings='NANOGrav'):
     """
     function to make the correlation matrix for a pulsar
     Parameters
@@ -310,11 +498,14 @@ def make_corr(ePsr, noise, freqs, dm=False, chrom=False, thin=1, A_gwb=1e-16, ga
     freqs : array
         Array of freqs over which the psd is given.
 
-    dm : bool, optional
+    include_dmgp_corr : bool, optional
         Option to include dm noise in the correlation matrix.
 
-    chrom : bool, optional
+    include_chromgp_corr : bool, optional
         Option to include chromatic noise in the correlation matrix.
+
+    include_swgp_corr : bool, optional
+        Option to include swgp noise in the correlation matrix.
 
     thin : int, optional
         Option to thin the toas for faster calculations.
@@ -327,50 +518,69 @@ def make_corr(ePsr, noise, freqs, dm=False, chrom=False, thin=1, A_gwb=1e-16, ga
         Spectral index of the GWB
 
     """
+    # thin the toas at the onset for maximal efficiency
     ePsr.toas = ePsr.toas[::thin]
     ePsr.toaerrs = ePsr.toaerrs[::thin]
-    ePsr.Mmat = ePsr.Mmat[::thin,:]
-    rn_psrs = get_red_noise(noise, 'red_noise')
-    dm_n_psrs = get_red_noise(noise, 'dm_gp')
-    chrom_n_psrs = get_red_noise(noise, 'chrom_gp')
+    ePsr.Mmat = ePsr.Mmat[::thin, :]
 
-    corr = white_noise_corr(ePsr, noise)[::thin,::thin]
-    plaw = hsen.red_noise_powerlaw(A_gwb=1e-16, gamma_gwb=13/3., freqs=freqs)
+    rn_psrs = get_noise_values(noise_dict, 'red_noise')
+    dm_n_psrs = get_noise_values(noise_dict, 'dm_gp')
+    chrom_n_psrs = get_noise_values(noise_dict, 'chrom_gp')
+    swgp_psrs = get_noise_values(noise_dict, 'sw_gp')
+
+    corr = white_noise_corr(ePsr,
+                            noise_dict,
+                            equad_convention=equad_convention,
+                            ecorr_settings=ecorr_settings)
+    plaw = hsen.red_noise_powerlaw(A_gwb=A_gwb, gamma_gwb=gamma_gwb, freqs=freqs)
     corr += hsen.corr_from_psd(freqs=freqs, psd=plaw,
                             toas=ePsr.toas)
-    # if rn:
-    if ePsr.name in rn_psrs.keys():
-        Amp, gam = rn_psrs[ePsr.name]
-        plaw_rn = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
 
-        corr += hsen.corr_from_psd(freqs=freqs, psd=plaw_rn,
+    if include_achrom_rn_corr:
+        if ePsr.name in rn_psrs.keys():
+            Amp, gam = rn_psrs[ePsr.name]
+            plaw_rn = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
+            corr += hsen.corr_from_psd(freqs=freqs, psd=plaw_rn,
                             toas=ePsr.toas)
-    if dm:
+    if include_dmgp_corr:
         if ePsr.name in dm_n_psrs.keys():
             Amp, gam = dm_n_psrs[ePsr.name]
             plaw_dm = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
-            corr += hsen.corr_from_psd_dm(freqs=freqs, psd=plaw_dm,
-                                toas=ePsr.toas, v_freqs=ePsr.freqs)
-    if chrom:
+            corr += hsen.corr_from_psd_dm(ePsr.toas, ePsr.freqs, freqs, plaw_dm)
+    if include_chromgp_corr:
         if ePsr.name in chrom_n_psrs.keys():
             Amp, gam = chrom_n_psrs[ePsr.name]
             key_chrom_idx = '{0}_chrom_gp_idx'.format(ePsr.name)
-            if key_chrom_idx in noise.keys():
-                plaw_cn = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
-                corr += hsen.corr_from_psd_chrom(freqs=freqs, psd=plaw_cn,
-                                toas=ePsr.toas, v_freqs=ePsr.freqs,
-                                    index=noise[key_chrom_idx])
+            if key_chrom_idx in noise_dict.keys():
+                plaw_chrom = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
+                corr += corr_from_psd_dm(
+                    ePsr.toas,
+                    ePsr.freqs,
+                    freqs,
+                    plaw_chrom,
+                    chromatic_index=noise_dict[key_chrom_idx]
+                    )
             else:
-                plaw_cn = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
-                corr += hsen.corr_from_psd_chrom(freqs=freqs, psd=plaw_cn,
-                                toas=ePsr.toas, v_freqs=ePsr.freqs,
-                                    index=4.)
-    psr = hsen.Pulsar(toas=ePsr.toas,
-                      toaerrs=ePsr.toaerrs,
-                      phi=ePsr.phi,theta=ePsr.theta,
-                      N=corr, designmatrix=ePsr.Mmat)
-    psr.name = ePsr.name
-    return psr
+                plaw_chrom = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
+                corr += corr_from_psd_chromatic(
+                    ePsr.toas,
+                    ePsr.freqs,
+                    freqs,
+                    psd=plaw_chrom,
+                    index=4.
+                    )
+    if include_swgp_corr:
+        if ePsr.name in swgp_psrs.keys():
+            Amp, gam = swgp_psrs[ePsr.name]
+            key_chrom_idx = '{0}_sw_gp_idx'.format(ePsr.name)
+            plaw_chrom = hsen.red_noise_powerlaw(A=Amp, gamma=gam, freqs=freqs)
+            corr += corr_from_psd_swgp(
+                ePsr.toas,
+                ePsr.freqs,
+                freqs,
+                plaw_chrom,
+                )
+    return corr
 
 
 def calc_pta_gw(parpath, timpath, psrlist, noise, dm=False, chrom=False):
