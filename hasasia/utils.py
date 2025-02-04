@@ -27,8 +27,8 @@ day_sec = 24*3600
 yr_sec = 365.25*24*3600
 
 # these should match the definition in enterprise_extensions.chromatic.solar_wind
-AU_light_sec = const.AU / const.c  # 1 AU in light seconds
-AU_pc = const.AU / const.pc  # 1 AU in parsecs (for DM normalization)
+AU_light_sec = const.astronomical_unit / const.speed_of_light # 1 AU in light seconds
+AU_pc = const.astronomical_unit / const.parsec  # 1 AU in parsecs (for DM normalization)
 
 def create_design_matrix(toas, RADEC=False, PROPER=False, PX=False):
     """
