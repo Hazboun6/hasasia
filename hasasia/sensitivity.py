@@ -5,7 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import scipy.linalg as sl
-import os, pickle, jax
+import os, pickle, jax, h5py
 from astropy import units as u
 import jax.numpy as jnp
 import jax.scipy as jsc
@@ -560,6 +560,28 @@ class Pulsar(object):
         self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
         self._G = G_matrix(designmatrix=self.designmatrix)
         self.N = N
+
+    def psr_h5(self, dir: str, compress_val: int = 0):
+        """Writes Pulsar object to HDF5 files
+
+        Args:
+            - dir (str): directory of HDF5 file
+            - compress_val: gzip compression value, ranges from  0 to 9 with
+              0 yielding no compression. Only large arrays such as G, N, and 
+              designmatrix are compressed.
+        """
+        with h5py.File(dir, 'a') as f:
+            hdf5_psr = f.create_group(self.name)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas)
+            hdf5_psr.create_dataset('toaerrs', self.toaerrs.shape, self.toaerrs.dtype, data=self.toaerrs)
+            hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
+            hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
+            hdf5_psr.create_dataset('designmatrix', self.designmatrix.shape, self.designmatrix.dtype, data=self.designmatrix, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            f.flush()
     
     @property
     def G(self):
@@ -787,6 +809,34 @@ class Spectrum(object):
         """
         self._psd_prefit += noise
 
+    def spec_h5(self, dir:str, compress_val: int = 0):
+        """Writes hasasia Spectrum object to hdf5 file
+        
+        Args:
+        - psr (hasasia.Spectrum): pulsar spectrum object
+        - dir (str): directory in which to save pulsar object. 
+        - compress_val (int): compression value ranging from 0 to 9.
+        """  
+        with h5py.File(dir, 'a') as f:
+            hdf5_psr = f.create_group(self.name)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
+            hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
+            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            f.flush()
 
 
 class Spectrum_RRF(object):
@@ -1095,6 +1145,35 @@ class Spectrum_RRF(object):
         plots.
         """
         self._psd_prefit += noise
+
+    def spec_h5(self, dir:str, compress_val: int = 0):
+        """Writes hasasia Spectrum object to hdf5 file
+        
+        Args:
+        - psr (hasasia.Spectrum): pulsar spectrum object
+        - dir (str): directory in which to save pulsar object. 
+        - compress_val (int): compression value ranging from 0 to 9.
+        """  
+        with h5py.File(dir, 'a') as f:
+            hdf5_psr = f.create_group(self.name)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
+            hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
+            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, 
+                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            f.flush()
 
 
 class SensitivityCurve(object):
