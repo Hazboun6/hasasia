@@ -2,10 +2,15 @@
 from __future__ import print_function
 """Main module."""
 import numpy as np
-import scipy.special as spec
+import scipy.optimize as sopt
+import scipy.special as ssp
+import scipy.integrate as si
+import scipy.stats as ss
+import healpy as hp
 import astropy.units as u
 import astropy.constants as c
 from .sensitivity import DeterSensitivityCurve, resid_response, get_dt
+from .utils import strain_and_chirp_mass_to_luminosity_distance
 
 __all__ = ['SkySensitivity',
            'h_circ',
@@ -103,7 +108,7 @@ class SkySensitivity(DeterSensitivityCurve):
             self.sky_response = (0.5 * self.sky_response[np.newaxis,:,:]
                                  * self.pt_sqr)
 
-    def SNR(self, h0, iota=None, psi=None):
+    def SNR(self, h0, iota=None, psi=None, fidx=None):
         r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
@@ -114,10 +119,17 @@ class SkySensitivity(DeterSensitivityCurve):
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
-        if iota is None or psi is None:
+       
+        if iota is None and psi is None:
             S_eff = self.S_eff
+        elif psi is not None and iota is None:
+            raise NotImplementedError('Currently cannot marginalize over polarization angle only.')
         else:
             S_eff = self.S_eff_full(iota, psi)
+
+        if fidx is not None:
+            S_eff = S_eff[fidx,:]
+
         return h0 * np.sqrt(self.Tspan / S_eff)
 
 
@@ -144,7 +156,7 @@ class SkySensitivity(DeterSensitivityCurve):
         An array representing the skymap of amplitudes needed to see the
         given signal with the SNR threshold specified.
         '''
-        if iota is None or psi is None:
+        if iota is None:
             S_eff = self.S_eff
         else:
             S_eff = self.S_eff_full(iota, psi)
@@ -174,39 +186,80 @@ class SkySensitivity(DeterSensitivityCurve):
         integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
         return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
 
-    def sky_response_full(self, iota, psi):
+    def sky_response_full(self, iota, psi=None):
         r'''
         Calculate the signal-to-noise ratio of a source given the strain
         amplitude. This is based on Equation (79) from Hazboun, et al., 2019
-        `[1]`_.
+        `[1]`_, but modified so that you calculate it for a particular inclination angle.
 
         .. math::
             \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
 
         .. _[1]: https://arxiv.org/abs/1907.04341
         '''
-        Ap_sqr = (0.5 * (1 + np.cos(iota)**2))**2
-        Ac_sqr = (np.cos(iota))**2
-        iota = iota if isinstance(iota, (int,float)) else np.array(iota)
-        psi = psi if isinstance(psi, (int,float)) else np.array(psi)
-        spsi = np.sin(2*np.array(psi))
-        cpsi = np.cos(2*np.array(psi))
-        if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
-            c1 = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
-            c2 = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
-            c3 = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
-            term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c1
-            term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c2
-            term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c3
-        elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
-            c1 = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
-            c2 = (Ap_sqr - Ac_sqr) * cpsi * spsi
-            c3 = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
-            term1 = self.Fplus**2 * c1
-            term2 = 2 * self.Fplus * self.Fcross * c2
-            term3 = self.Fcross**2 * c3
+        if iota is None and psi is None:
+            raise ValueError('Must specify sky angle with `*_full`. Use `S_eff` for angle averaged sensitivity.')
+        if iota is None and psi is not None:
+            raise NotImplementedError('Currently cannot marginalize over inclination but not phase.') 
+        Ap_sqr = (1 + np.cos(iota)**2)**2 # (0.5 * (1 + np.cos(iota)**2))**2
+        Ac_sqr = (2*np.cos(iota))**2
+        if psi is None: # case where we average over polarization but not inclination
+            # 0.5 is from averaging over polarization
+            # Fplus*Fcross term goes to zero
+            if isinstance(Ap_sqr,np.ndarray):
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 0.5 * (Ap_sqr + Ac_sqr)
+            elif isinstance(Ap_sqr,(int,float)):
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+        else: # case where we don't average over polarization or inclination
+            c_pluplus, c_pluscross, c_crosscross = self._angle_coefficients(iota=iota, psi=psi)
+            if isinstance(Ap_sqr,np.ndarray) or isinstance(psi,np.ndarray):
+                term1 = self.Fplus[:,:,np.newaxis,np.newaxis]**2 * c_pluplus
+                term2 = 2 * self.Fplus[:,:,np.newaxis,np.newaxis] * self.Fcross[:,:,np.newaxis,np.newaxis] * c_pluscross
+                term3 = self.Fcross[:,:,np.newaxis,np.newaxis]**2 * c_crosscross
+            elif isinstance(Ap_sqr,(int,float)) or isinstance(psi,(int,float)):
+                term1 = self.Fplus**2 * c_pluplus
+                term2 = 2 * self.Fplus * self.Fcross * c_pluscross
+                term3 = self.Fcross**2 * c_crosscross
 
-        return term1 + term2 + term3
+            return term1 + term2 + term3
+        
+    def _angle_coefficients(self, iota, psi=None):
+        r'''
+        Calculate the signal-to-noise ratio of a source given the strain
+        amplitude. This is based on Equation (79) from Hazboun, et al., 2019
+        `[1]`_, but modified so that you calculate it for a particular inclination angle.
+
+        .. math::
+            \rho(\hat{n})=h_0\sqrt{\frac{T_{\rm obs}}{S_{\rm eff}(f_0 ,\hat{k})}}
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        '''
+        if iota is None and psi is not None:
+            raise NotImplementedError('Currently can marginalize over inclination but not phase.') 
+        Ap_sqr = (1 + np.cos(iota)**2)**2 # (0.5 * (1 + np.cos(iota)**2))**2
+        Ac_sqr = (2*np.cos(iota))**2
+        if psi is None: # case where we average over polarization but not inclination
+            # 0.5 is from averaging over polarization
+            # Fplus*Fcross term goes to zero
+            if isinstance(Ap_sqr,np.ndarray):
+                return (self.Fplus[:,:,np.newaxis]**2 + self.Fcross[:,:,np.newaxis]**2) * 0.5 * (Ap_sqr + Ac_sqr)
+            elif isinstance(Ap_sqr,(int,float)):
+                return (self.Fplus**2 + self.Fcross**2) * 0.5 * (Ac_sqr + Ap_sqr)
+        else: # case where we don't average over polarization or inclination
+            iota = iota if isinstance(iota, (int,float)) else np.array(iota)
+            psi = psi if isinstance(psi, (int,float)) else np.array(psi)
+            spsi = np.sin(2*np.array(psi))
+            cpsi = np.cos(2*np.array(psi))
+            if isinstance(Ap_sqr,np.ndarray) or isinstance(spsi,np.ndarray):
+                c_pluplus = Ac_sqr[:,np.newaxis]*spsi**2 + Ap_sqr[:,np.newaxis]*cpsi**2
+                c_pluscross = (Ap_sqr[:,np.newaxis] - Ac_sqr[:,np.newaxis]) * cpsi * spsi
+                c_crosscross = Ap_sqr[:,np.newaxis]*spsi**2 + Ac_sqr[:,np.newaxis]*cpsi**2
+            elif isinstance(Ap_sqr,(int,float)) or isinstance(spsi,(int,float)):
+                c_pluplus = Ac_sqr*spsi**2 + Ap_sqr*cpsi**2
+                c_pluscross = (Ap_sqr - Ac_sqr) * cpsi * spsi
+                c_crosscross = Ap_sqr*spsi**2 + Ac_sqr*cpsi**2
+
+            return c_pluplus, c_pluscross, c_crosscross
 
     def S_SkyI_full(self, iota, psi):
         """Per Pulsar Strain power sensitivity. """
@@ -221,14 +274,31 @@ class SkySensitivity(DeterSensitivityCurve):
             if sky_resp.ndim == 2:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis]
                                      * sky_resp[np.newaxis,:,:])
-            if sky_resp.ndim == 4:
+            elif sky_resp.ndim == 3:
+                self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis]
+                                     * sky_resp[np.newaxis,:,:,:])
+            elif sky_resp.ndim == 4:
                 self._S_SkyI_full = (RNcalInv.T[:,:,np.newaxis,np.newaxis,np.newaxis]
                                      * sky_resp[np.newaxis,:,:,:,:])
 
         return self._S_SkyI_full
 
     def S_eff_full(self, iota, psi):
-        """Strain power sensitivity. """
+        """
+        Strain power sensitivity.
+        
+        Can calculate margninalized over polarization or not
+        with inclination explicit in both cases.
+        (Use psi=None for marginalization over polarization.)
+        
+        Params
+        ------
+        iota : float, array
+            Inclination angle of the source.
+        psi : float, array
+            Polarization angle of the source.
+
+        """
         if self.pulsar_term == 'explicit':
             raise NotImplementedError('Currently cannot use pulsar term.')
             # self._S_eff_full = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
@@ -241,21 +311,256 @@ class SkySensitivity(DeterSensitivityCurve):
 
         return self._S_eff_full
 
+    def false_dismissal_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'int_method': 'dblquad','h0':None,'fidx':None}):
+        '''
+        False dismissal probability of the F-statistic
+        Use None for the Fe statistic and the number of pulsars for the Fp stat.
+        Note that 1 - false_dismissal_prob is the detection probability.
+        
+        Parameters
+        ----------
+        F_thresh : float,array
+            F-statistic threshold
+
+        snr : float, optional
+            Signal to noise ratio for a given single source.
+
+        Npsrs : string, optional
+            Number of pulsars in the array for using the Fp statistic.
+            Use None for the Fe statistic.
+
+        ave : string, optional -- choose from ['none','snr','prob']
+            Point at which angle averaging happens for the F-statistic.
+            See appendix of Baier et al. 2024 `[2]` for details.
+                None   -- explicit calculation over inclination and polarization
+                'snr'  -- analytic marginalization over snr prior to computing fdp
+                'prob' -- numeric marginalization over fdp
+
+        prob_kwargs : dict, optional
+            int_method : string, optional -- choose from ['dblquad','trapz']
+                Method for integrating over inclination and polarization.
+                Use 'dblquad' for scipy integration or 'trapz' for trapezoidal approximation.
+            h0 : float, optional
+                Strain amplitude of the source.
+            fidx : int, optional
+                Frequency index of the source.
+            snr_grid : array, optional
+                Grid of SNR values for the source. Required for 'trapz' method.
+                See `sky_ave_SNR_gridded` for gridding convenience.
+
+        Returns
+        -------
+        fdp : float, array
+            False dismissal probability for a given F-statistic threshold.
+
+        .. _[2]: https://arxiv.org/abs/2409.00336
+        .._ [3]: https://arxiv.org/abs/1503.04803
+        '''
+        if Npsrs is None:
+            N = 4
+        elif isinstance(Npsrs,int):
+            N = int(4 * Npsrs)
+        
+        if ave is None or ave=='none':
+            return ss.ncx2.cdf(2*F_thresh, df=N, nc=snr**2)
+        elif ave=='snr':
+            return ss.chi2.cdf(2*F_thresh, df=N, loc=snr**2)
+        elif ave=='prob':
+            if prob_kwargs['fidx'] is None:
+                raise ValueError('fidx must be set!')
+            if prob_kwargs['int_method'] == 'dblquad':
+                return self._fdp_angle_averaged_dblquad(F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+            elif prob_kwargs['int_method'] == 'trapz':
+                return self._fdp_angle_averaged_trapz(prob_kwargs['snr_grid'], F_thresh, prob_kwargs['h0'], prob_kwargs['fidx'])
+            else:
+                raise ValueError('int_method must be dblquad or trapz')
+
+    def detection_prob(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None,'fidx':None}):
+        '''
+        Detection probability of the F-statistic. See Rosado et al. 2015 `[3]` equation 32.
+        Use None for the Fe and the number of pulsars for the Fp stat.
+
+       Parameters
+        ----------
+        F_thresh : float,array
+            F-statistic threshold
+
+        snr : float, optional
+            Signal to noise ratio for a given single source.
+
+        Npsrs : string, optional
+            Number of pulsars in the array for using the Fp statistic.
+            Use None for the Fe statistic.
+
+        ave : string, optional -- choose from ['none','snr','prob']
+            Point at which angle averaging happens for the F-statistic.
+            See appendix of Baier et al. 2024 `[2]` for details.
+                None   -- explicit calculation over inclination and polarization
+                'snr'  -- analytic marginalization over snr prior to computing fdp
+                'prob' -- numeric marginalization over fdp
+
+        prob_kwargs : dict, optional
+            int_method : string, optional -- choose from ['dblquad','trapz']
+                Method for integrating over inclination and polarization.
+                Use 'dblquad' for scipy integration or 'trapz' for trapezoidal approximation.
+            h0 : float, optional
+                Strain amplitude of the source.
+            fidx : int, optional
+                Frequency index of the source.
+            snr_grid : array, optional
+                Grid of SNR values for the source. Required for 'trapz' method.
+                See `sky_ave_SNR_gridded` for gridding convenience.
+
+        Returns
+        -------
+        detection_prob : float, array
+            Detection probability for a given F-statistic threshold.
+
+        .. _[2]: https://arxiv.org/abs/2409.00336
+        .._ [3]: https://arxiv.org/abs/1503.04803
+        '''
+        return 1 - self.false_dismissal_prob(F_thresh, snr, Npsrs, ave, prob_kwargs)
+    
+    def total_detection_probability(self, F_thresh, snr=None, Npsrs=None, ave=None, prob_kwargs={'h0':None, 'fidx': None}):
+        '''
+        Computes the total detection probability across frequency bins and strain amplitudes of a SMBBH population.
+        See equation 33 in Rosado et al. 2015 '[3]' and equation 7 in Baier et al. 2024 '[2]'.
+        Can be interpretted as the probability of detecting a single source in *any* frequency bin.
+        
+       Parameters
+        ----------
+        F_thresh : float,array
+            F-statistic threshold
+
+        snr : float, optional
+            Signal to noise ratio for a given single source.
+
+        Npsrs : string, optional
+            Number of pulsars in the array for using the Fp statistic.
+            Use None for the Fe statistic.
+
+        ave : string, optional -- choose from ['none','snr','prob']
+            Point at which angle averaging happens for the F-statistic.
+            See appendix of Baier et al. 2024 `[2]` for details.
+                None   -- explicit calculation over inclination and polarization
+                'snr'  -- analytic marginalization over snr prior to computing fdp
+                'prob' -- numeric marginalization over fdp
+
+        prob_kwargs : dict, optional
+            int_method : string, optional -- choose from ['dblquad','trapz']
+                Method for integrating over inclination and polarization.
+                Use 'dblquad' for scipy integration or 'trapz' for trapezoidal approximation.
+            h0 : float, optional
+                Strain amplitude of the source.
+            fidx : int, optional
+                Frequency index of the source.
+            snr_grid : array, optional
+                Grid of SNR values for the source. Required for 'trapz' method.
+                See `sky_ave_SNR_gridded` for gridding convenience.
+
+        Returns
+        -------
+        tdp : float
+            Total detection probability for a given F-statistic threshold.
+
+        .. _[2]: https://arxiv.org/abs/2409.00336
+        .._ [3]: https://arxiv.org/abs/1503.04803
+        '''
+        h0s = prob_kwargs['h0']
+        fidxs = np.arange(len(prob_kwargs['fidx']))
+        return 1. - np.prod(
+            [self.false_dismissal_prob(
+                F_thresh,
+                snr=snr,
+                Npsrs=Npsrs,
+                ave=ave,
+                prob_kwargs={'h0':h0,
+                             'fidx':fidx,
+                             'int_method':prob_kwargs['int_method'],
+                             'snr_grid':prob_kwargs['snr_grid']})
+                    for h0, fidx in zip(h0s,fidxs)
+            ],
+        axis=0)
+
+    def _fdp_angle_averaged_dblquad(self, F_thresh, h0, fidx):
+        '''
+        The angle-averaged false dismissal probablity. See arXiv....
+        '''
+        integrand = lambda psi, iota: np.sin(iota)/np.pi*ss.ncx2.cdf(2*F_thresh, df=4, 
+                                                                     nc=self.SNR(h0,iota,psi,fidx).mean()**2)
+        return si.dblquad(integrand,0,np.pi,-np.pi/4,np.pi/4)[0]
+
+    def _fdp_angle_averaged_trapz(self, snrs, F_thresh, h0, fidx):
+        '''
+        The angle-averaged false dismissal probablity. See arXiv....
+        '''
+        # define the points for integration
+        iotas = np.linspace(0, np.pi, snrs.shape[0])
+        psis = np.linspace(-np.pi/4, np.pi/4, snrs.shape[1])
+        # 2d array of integrand values
+        Z =  np.sin(iotas)/np.pi*ss.ncx2.cdf(2*F_thresh,
+                                            df=4,
+                                            nc=(h0*snrs[:, :, fidx])**2)
+        # perform the 2D integration using the trapezoidal method twice
+        return np.trapz(np.trapz(Z, iotas, axis=1), psis, axis=0)
+    
+    def sky_ave_SNR_gridded(self, iota, psi, fidxs=None):
+        r'''
+        Calculate signal-to-noise ratio across a grid of iota and psi values.
+        **Note**: This isn't actually SNR but SNR divided by the strain amplitude.
+        This allows the values to be used for any signal value.
+        '''
+        if fidxs is None: # trick so that all the frequencies get used
+            fidxs = np.arange(len(self.freqs))
+        grid = []
+        for _ , iot in enumerate(iota):
+            column = []
+            for _ , ps in enumerate(psi):
+                column.append(
+                    np.sqrt(self.Tspan/self.S_eff_full(iot, ps)[fidxs,:]).mean(axis=1)
+                    )
+            grid.append(column)
+
+        return np.array(grid)
+
+    def _solve_F_given_fdp_snr(self, fdp0=0.05, snr=3, Npsrs=None,):
+        """
+        Solves for the F-statistic threshold given a false dismissal probability and SNR.
+        """
+        Npsrs = 1 if Npsrs is None else Npsrs
+        F0 = (4*Npsrs+snr**2)/2 
+        return sopt.fsolve(lambda F :self.false_dismissal_prob(F, snr, Npsrs=Npsrs, )-fdp0, F0)
+
+    def _solve_snr_given_fdp_F(self, fdp0=0.05, F=3, Npsrs=None,):
+        """
+        Solves for the signal to noise ration given a false dismissal probability and F-statistic value.
+        """
+        Npsrs = 1 if Npsrs is None else Npsrs
+        snr0 = np.sqrt(2*F-4*Npsrs)
+        return sopt.fsolve(lambda snr :self.false_dismissal_prob(F, snr, Npsrs=Npsrs, )-fdp0, snr0)
+
     @property
     def S_eff(self):
-        """Strain power sensitivity. """
+        """
+        Strain power sensitivity. NOTE: The prefactors in these expressions are a factor of 4x larger than in 
+        Hazboun, et al., 2019 `[1]` due to a redefinition of h0 to match the one in normal use in the PTA community.
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
         if not hasattr(self, '_S_eff'):
             if self.pulsar_term == 'explicit':
-                self._S_eff = 1.0 / (4./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (16./5 * np.sum(self.S_SkyI, axis=1))
             elif self.pulsar_term:
-                self._S_eff = 1.0 / (12./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (48./5 * np.sum(self.S_SkyI, axis=1))
             else:
-                self._S_eff = 1.0 / (6./5 * np.sum(self.S_SkyI, axis=1))
+                self._S_eff = 1.0 / (24./5 * np.sum(self.S_SkyI, axis=1))
         return self._S_eff
 
     @property
     def S_SkyI(self):
-        """Per Pulsar Strain power sensitivity. """
+        """
+        Per Pulsar Strain power sensitivity.
+        (Technically, 1 over this is proportional to the per pulsar strain power sensitivity.)
+        """
         if not hasattr(self, '_S_SkyI'):
             t_I = self.T_I / self.Tspan
             RNcalInv = t_I[:,np.newaxis] / self.SnI
@@ -289,6 +594,43 @@ class SkySensitivity(DeterSensitivityCurve):
             else:
                 self._S_eff_mean = 1.0 / (12./5 * mean_sky)
         return self._S_eff_mean
+
+    def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
+        r"""
+        Calculates the detection volume of the PTA
+        at a given frequency or list of frequencies.
+
+        Parameters
+        ----------
+        
+        f0 : float
+            the frequency [Hz] at which to calculate detection volume
+            
+        SNR_threshold : float
+            the signal to noise to referene detection volume to
+
+        M_c : float
+            the chirp mass [Msun] at which to reference detection volume
+
+        Returns
+        -------
+        
+        volume : float
+            the detection volume in Mpc^3
+
+        """
+        NSIDE = hp.pixelfunc.npix2nside(self.S_eff.shape[1])
+        dA = hp.pixelfunc.nside2pixarea(NSIDE, degrees=False)
+        if isinstance(f0, (int,float)):
+            f_idx = np.array([np.argmin(abs(self.freqs - f0))])
+        elif isinstance(f0, (np.ndarray, list)):
+            f_idx = np.array([np.argmin(abs(self.freqs - f)) for f in f0])
+        h0 = self.h_thresh(SNR=SNR_threshold)
+        # detection volume is one-third the sum of detection radius * pixel area over all pixels
+        volume = [dA/3.*np.sum(
+            strain_and_chirp_mass_to_luminosity_distance(h0[fdx], M_c, self.freqs[fdx])**3,
+            axis=0).value for fdx in f_idx]
+        return volume[0] if len(volume)==1 else volume
 
 
 def h_circ(M_c, D_L, f0, Tspan, f):
