@@ -290,7 +290,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
 @partial(jax.jit, static_argnames=['full_matrix', 'return_Gtilde_Ncal'])
 def get_NcalInv_RRF(K_inv: jax.Array, G: jax.Array, phi:jax.Array, J: jax.Array,
                     Z: jax.Array, freqs: jax.Array, toas:jax.Array, full_matrix=False, return_Gtilde_Ncal=False):
-    """Inverse noise-weighted transmission function utilizing rank-reduced formalism and Woodbury Lemma.
+    r"""Inverse noise-weighted transmission function utilizing rank-reduced formalism and Woodbury Lemma.
 
     .. math::
     \mathcal{N}^{-1}(f) \equiv  \frac{1}{2T}\tilde{G}^{*} [K^{-1} - \mathcal{Z}^{T} (\varphi^{-1} + \mathcal{Z} J)^{-1} \mathcal{Z}] \tilde{G}^T
