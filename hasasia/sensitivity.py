@@ -860,11 +860,23 @@ class Spectrum_RRF(object):
     psr : `hasasia.Pulsar`
         A `hasasia.Pulsar` instance.
 
-    amp : float
+    amp_irn : float
         Pulsar red noise spectra amplitude
 
-    gamma: float
+    gamma_irn: float
         Pulsar red noise spectral index
+
+    freqs_irn_comp: int
+        Number of harmonics that the instrinsic red noise is present in the frequencies
+
+    amp_gw : float
+        GWB spectra amplitude
+
+    gamma_gw: float
+        GWB spectral index
+
+    freqs_gwb_comp: int
+        Number of harmonics that the GWB is present in the frequencies
 
     nf : int, optional
         Number of frequencies over which to build the various spectral
