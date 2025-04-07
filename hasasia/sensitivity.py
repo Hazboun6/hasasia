@@ -884,7 +884,7 @@ class Spectrum_RRF(object):
     """
     def __init__(self, psr:Pulsar, Tspan:float, freqs_gw_comp:int, amp_gw:float, gamma_gw:float,
                 freqs_irn_comp:int, amp_irn = None, gamma_irn = None, nf=400, fmin=None,
-                fmax=2e-7, freqs=None,  tm_fit=True, **Tf_kwargs):
+                fmax=2e-7, freqs=None,  tm_fit=True):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
@@ -903,17 +903,17 @@ class Spectrum_RRF(object):
             raise Exception('Frequencies of the GWB MUST be a subset of the intrinsic red noise frequencies.')
 
         #intrinsic red noise frequencies and psd parameters
-        self.freqs_rn = np.linspace(1/Tspan, freqs_irn_comp/Tspan, freqs_irn_comp)
+        self.freqs_irn = np.linspace(1/Tspan, freqs_irn_comp/Tspan, freqs_irn_comp)
         self.amp = amp_irn
         self.gamma = gamma_irn
 
         #gwb frequencies and psd parameters
-        self.freqs_gwb = self.freqs_rn[:freqs_gw_comp]
+        self.freqs_gwb = self.freqs_irn[:freqs_gw_comp]
         self.amp_gw = amp_gw
         self.gamma_gw = gamma_gw
 
         self.tm_fit = tm_fit
-        self.Tf_kwargs = Tf_kwargs
+        
         if freqs is None:
             f0 = 1 / get_Tspan([psr])
             if fmin is None:
@@ -941,16 +941,6 @@ class Spectrum_RRF(object):
             # self.add_white_noise_pow(sigma=sigma,dt=dt)
 
         return self._psd_prefit
-
-    @property
-    def Tf(self):
-        if not hasattr(self, '_Tf'):
-            self._Tf,_,_ = get_Tf(designmatrix=self.designmatrix,
-                                  toas=self.toas, N=self.N,
-                                  freqs=self.freqs, from_G=True, Gmatrix=self.G,
-                                  **self.Tf_kwargs)
-        return self._Tf
-    
 
     @cached_property
     def Cirn(self):

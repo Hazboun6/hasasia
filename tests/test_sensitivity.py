@@ -64,21 +64,22 @@ def test_sensitivity_w_rednoise():
         spectra3.append(sp)
 
     spectra2_RRF = []
+    Tspan = hsen.get_Tspan(psrs2)
     for p in psrs2:
         __ = p.K_inv
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
         _ = sp.NcalInv
         spectra2_RRF.append(sp)
 
     spectra3_RRF = []
+    Tspan = hsen.get_Tspan(psrs2)
     for p in psrs3:
         __ = p.K_inv
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
         _ = sp.NcalInv
         spectra3_RRF.append(sp)
 
     spec = spectra3[0]
-    spec.Tf
     spec.S_I
     spec.S_R
     spec.h_c
@@ -110,7 +111,6 @@ def test_sensitivity_w_rednoise():
     sc3b.Omega_gw
 
     spec_RRF = spectra3_RRF[0]
-    spec_RRF.Tf
     spec_RRF.S_I
     spec_RRF.S_R
     spec_RRF.h_c
