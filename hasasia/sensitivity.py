@@ -568,7 +568,6 @@ class Pulsar(object):
         self.designmatrix = create_design_matrix(self.toas, RADEC=True, PROPER=True, PX=True)
         self._G = G_matrix(designmatrix=self.designmatrix)
         self.N = N
-<<<<<<< HEAD
 
     def psr_h5(self, dir: str, compress_val: int = 0):
         """Writes Pulsar object to HDF5 files
@@ -591,8 +590,6 @@ class Pulsar(object):
             hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
             f.flush()
-=======
->>>>>>> 9c9ae31fcc34b512e95d74d3aad40c4dc8f0a0c1
     
     @property
     def G(self):
