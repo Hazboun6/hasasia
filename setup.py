@@ -17,6 +17,7 @@ requirements = ['numpy',
                 'jaxlib',
                 'jax',
                 'healpy',
+                'h5py'
                 ]
 
 setup(
