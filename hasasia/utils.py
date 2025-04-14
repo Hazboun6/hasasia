@@ -5,6 +5,7 @@ import scipy.optimize as sopt
 import scipy.special as ssp
 import scipy.integrate as si
 import scipy.stats as ss
+import scipy.constants as const # the same as enterprise.constants
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import astropy.constants as c
@@ -24,6 +25,10 @@ __all__ = ['create_design_matrix',
 
 day_sec = 24*3600
 yr_sec = 365.25*24*3600
+
+# these should match the definition in enterprise_extensions.chromatic.solar_wind
+AU_light_sec = const.astronomical_unit / const.speed_of_light # 1 AU in light seconds
+AU_pc = const.astronomical_unit / const.parsec  # 1 AU in parsecs (for DM normalization)
 
 def create_design_matrix(toas, RADEC=False, PROPER=False, PX=False):
     """
@@ -237,3 +242,75 @@ def distance_on_sphere(lat1, lon1, lat2, lon2):
     distance = c
     
     return distance
+
+
+######## solar wind utils  -- copied from enterprise_extensions.chromatic.solar_wind ########
+
+def _dm_solar_close(n_earth, r_earth):
+    return (n_earth * AU_light_sec * AU_pc / r_earth)
+
+
+def _dm_solar(n_earth, theta, r_earth):
+    return ((np.pi - theta) *
+            (n_earth * AU_light_sec * AU_pc
+             / (r_earth * np.sin(theta))))
+
+def dm_solar(n_earth, theta, r_earth):
+    """
+    Calculates Dispersion measure due to 1/r^2 solar wind density model.
+    ::param :n_earth Solar wind proto/electron density at Earth (1/cm^3)
+    ::param :theta: angle between sun and line-of-sight to pulsar (rad)
+    ::param :r_earth :distance from Earth to Sun in (light seconds).
+    See You et al. 2007 for more details.
+    """
+    return np.where(np.pi - theta >= 1e-5,
+                    _dm_solar(n_earth, theta, r_earth),
+                    _dm_solar_close(n_earth, r_earth))
+
+def theta_impact(planetssb, sunssb, pos_t):
+    """
+    Use the attributes of an enterprise Pulsar object to calculate the
+    solar impact angle.
+
+    ::param :planetssb Solar system barycenter time series supplied with
+        enterprise.Pulsar objects.
+    ::param :sunssb Solar system sun-to-barycenter timeseries supplied with
+        enterprise.Pulsar objects.
+    ::param :pos_t Unit vector to pulsar position over time in ecliptic
+        coordinates. Supplied with enterprise.Pulsar objects.
+
+    returns: Solar impact angle (rad), Distance to Earth (R_earth),
+             impact distance (b), perpendicular distance (z_earth)
+    """
+    earth = planetssb[:, 2, :3]
+    sun = sunssb[:, :3]
+    earthsun = earth - sun
+    R_earth = np.sqrt(np.einsum('ij,ij->i', earthsun, earthsun))
+    Re_cos_theta_impact = np.einsum('ij,ij->i', earthsun, pos_t)
+
+    theta_impact = np.arccos(-Re_cos_theta_impact / R_earth)
+    b = np.sqrt(R_earth**2 - Re_cos_theta_impact**2)
+
+    return theta_impact, R_earth, b, -Re_cos_theta_impact
+
+def solar_wind_geometric_factor(radio_freqs, planetssb, sunssb, pos_t):
+    """
+    Calculate the geometric delay factor due to solar wind dispersion.
+    Parameters
+    ----------
+    ::param :radio_freqs: radio frequencies in MHz
+    ::param :planetssb Solar system barycenter time series supplied with
+        enterprise.Pulsar objects.
+    ::param :sunssb Solar system sun-to-barycenter timeseries supplied with
+        enterprise.Pulsar objects.
+    ::param :pos_t Unit vector to pulsar position over time in ecliptic
+        coordinates. Supplied with enterprise.Pulsar objects.
+    Returns
+    -------
+    ::return :dt_DM: Dispersive delay induced by solar wind. Probably dimensionless.
+    """
+    theta, R_earth, _, _ = theta_impact(planetssb, sunssb, pos_t)
+    dm_sol_wind = dm_solar(1.0, theta, R_earth)
+    dt_DM = dm_sol_wind * 4.148808e3 /(radio_freqs**2)
+
+    return dt_DM
