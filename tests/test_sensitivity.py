@@ -63,8 +63,23 @@ def test_sensitivity_w_rednoise():
         _ = sp.NcalInv
         spectra3.append(sp)
 
+    spectra2_RRF = []
+    Tspan = hsen.get_Tspan(psrs2)
+    for p in psrs2:
+        __ = p.K_inv
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
+        _ = sp.NcalInv
+        spectra2_RRF.append(sp)
+
+    spectra3_RRF = []
+    Tspan = hsen.get_Tspan(psrs2)
+    for p in psrs3:
+        __ = p.K_inv
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
+        _ = sp.NcalInv
+        spectra3_RRF.append(sp)
+
     spec = spectra3[0]
-    spec.Tf
     spec.S_I
     spec.S_R
     spec.h_c
@@ -83,11 +98,49 @@ def test_sensitivity_w_rednoise():
     sc3a = hsen.GWBSensitivityCurve(spectra3)
     sc3b = hsen.DeterSensitivityCurve(spectra3)
 
+    sc2a.h_c
+    sc2a.Omega_gw
+    sc2a.S_effIJ
+    sc2b.h_c
+    sc2b.Omega_gw
+
     sc3a.h_c
     sc3a.Omega_gw
     sc3a.S_effIJ
     sc3b.h_c
     sc3b.Omega_gw
+
+    spec_RRF = spectra3_RRF[0]
+    spec_RRF.S_I
+    spec_RRF.S_R
+    spec_RRF.h_c
+    spec_RRF.Omega_gw
+    sigma_RRF = spec.toaerrs.mean()
+    dt = hsen.get_dt(spec_RRF.toas).to('s').value
+    spec_RRF.add_white_noise_power(sigma_RRF,dt)
+    spec_RRF.add_red_noise_power(A=6.8e-16,gamma=13/3.)
+    spec_RRF.psd_prefit
+    spec_RRF.psd_postfit
+    spec_RRF.add_noise_power(spec_RRF.psd_prefit)
+    hsen.corr_from_psd(freqs, spec_RRF.psd_prefit, spec_RRF.toas)
+
+    sc2a_RRF = hsen.GWBSensitivityCurve(spectra2_RRF)
+    sc2b_RRF = hsen.DeterSensitivityCurve(spectra2_RRF)
+    sc3a_RRF = hsen.GWBSensitivityCurve(spectra3_RRF)
+    sc3b_RRF = hsen.DeterSensitivityCurve(spectra3_RRF)
+
+    sc2a_RRF.h_c
+    sc2a_RRF.Omega_gw
+    sc2a_RRF.S_effIJ
+    sc2b_RRF.h_c
+    sc2b_RRF.Omega_gw
+
+    sc3a_RRF.h_c
+    sc3a_RRF.Omega_gw
+    sc3a_RRF.S_effIJ
+    sc3b_RRF.h_c
+    sc3b_RRF.Omega_gw
+
 
 def test_nonGR():
     psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
@@ -116,3 +169,4 @@ def test_get_NcalInvIJ():
     psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
                         phi=phi,theta=theta)
     hsen.get_NcalInvIJ(psrs, 1e-15, freqs)
+
