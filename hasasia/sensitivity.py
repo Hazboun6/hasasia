@@ -716,7 +716,7 @@ class Spectrum(object):
         self._NcalInv = value
     
     def update_NcalInv_with_approx(self, P_noise, Tf=None, return_NcalInv_approx=False):
-        r"""""
+        r"""
         Updates the NcalInv property with the following approximation: NcalInv = Tf/Pn(f).
         See Figure 5 in [1]_ for the validity of this approximation.
         This is a faster calculation, but less accurate than the full calculation.
@@ -725,23 +725,20 @@ class Spectrum(object):
 
         Parameters
         ----------
-        Pn : ndarray
-            Provide already calculated noise power spectral density. This is only used if using
-            the approximation.
+        Pnoise : ndarray
+            Provide already calculated noise power spectral density.
+            Need to be the same shape as the number of frequencies.
         Tf : ndarray, optional
-            Provide already calculated transmission function. If None, it will be default to the 
+            Provide already calculated transmission function. If None, it will be default to the
+            cached Tf property.
         return_NcalInv_approx : bool, optional
             Whether to return the approximate NcalInv. If False, the property is updated
             and nothing is returned.
-        Parameters
-        ----------
-
-        Pn : ndarray, optional
-            Provide already calculated noise power spectral density. This is only used if using
-            the approximation.
-        Tf : ndarray, optional
-            Provide already calculated transmission function. This is only used if using
-            the approximation.
+        
+        Returns
+        -------
+        NcalInv_approx : ndarray
+            The approximate inverse noise weighted transmission function.
         """
         if Tf is None:
             Tf = self.Tf # use cached Transmission function property
