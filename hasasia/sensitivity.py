@@ -228,6 +228,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     Gmatrix : ndarray, optional
         Provide already calculated G-matrix. This can speed up calculations
         since the singular value decomposition can take time for large matrices.
+        
 
     Returns
     -------
@@ -285,7 +286,6 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(TfN)
     else:
         return np.real(np.diag(TfN)) / get_Tspan([psr])
-    
 
 @partial(jax.jit, static_argnames=['full_matrix', 'return_Gtilde_Ncal'])
 def get_NcalInv_RRF(K_inv: jax.Array, G: jax.Array, phi:jax.Array, J: jax.Array,
@@ -704,6 +704,56 @@ class Spectrum(object):
             self._NcalInv = get_NcalInv(psr=self, freqs=self.freqs,
                                         tm_fit=self.tm_fit, Gmatrix=self.G)
         return self._NcalInv
+    
+    @NcalInv.setter
+    def NcalInv(self, value):
+        """
+        Use a setter to update the inverse noise weighted transmission function.
+        Currently can only use this with the approximation.
+        """
+        if value.shape != self.freqs.shape:
+            raise ValueError('Inverse Noise Weighted Transmission Function must have the same shape as freqs.')
+        self._NcalInv = value
+    
+    def update_NcalInv_with_approx(self, P_noise, Tf=None, return_NcalInv_approx=False):
+        r"""""
+        Updates the NcalInv property with the following approximation: NcalInv = Tf/Pn(f).
+        See Figure 5 in [1]_ for the validity of this approximation.
+        This is a faster calculation, but less accurate than the full calculation.
+        The use case for this would be expediently updating sensitivity curves
+        with changes in the noise properties.
+
+        Parameters
+        ----------
+        Pn : ndarray
+            Provide already calculated noise power spectral density. This is only used if using
+            the approximation.
+        Tf : ndarray, optional
+            Provide already calculated transmission function. If None, it will be default to the 
+        return_NcalInv_approx : bool, optional
+            Whether to return the approximate NcalInv. If False, the property is updated
+            and nothing is returned.
+        Parameters
+        ----------
+
+        Pn : ndarray, optional
+            Provide already calculated noise power spectral density. This is only used if using
+            the approximation.
+        Tf : ndarray, optional
+            Provide already calculated transmission function. This is only used if using
+            the approximation.
+        """
+        if Tf is None:
+            Tf = self.Tf # use cached Transmission function property
+        if Tf.shape != P_noise.shape:
+            raise ValueError('Transmission function and '
+                             'noise power spectral density must have the same shape.')
+        NcalInv_approx = Tf / P_noise
+        # update with the setter defined above
+        self.NcalInv = NcalInv_approx
+
+        if return_NcalInv_approx:
+            return self.NcalInv
 
     @property
     def P_n(self):
