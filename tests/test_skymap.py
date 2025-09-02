@@ -37,7 +37,7 @@ def sm_simple():
     freqs = np.logspace(np.log10(1/(5*Tspan)),np.log10(2e-7),500)
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6e-16, gamma_gw=13/3.)
         sp.NcalInv
         spectra.append(sp)
 
@@ -79,7 +79,7 @@ def sm_simple_healpy():
     freqs = np.logspace(np.log10(1/(5*Tspan)),np.log10(2e-7),500)
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6e-15, gamma_gw=13/3.)
         sp.NcalInv
         spectra.append(sp)
 
@@ -119,7 +119,7 @@ def spectra_theta_phi():
     freqs = np.logspace(np.log10(1/(5*Tspan)),np.log10(2e-7),500)
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6e-16, gamma_gw=13/3.)
         sp.NcalInv
         spectra.append(sp)
 
