@@ -39,7 +39,7 @@ def test_simple_pta(pta_simple):
     """Sensitivity Tests"""
     spectra = []
     for p in pta_simple:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6e-16, gamma_gw = 13/3)
         sp.Tf
         spectra.append(sp)
 

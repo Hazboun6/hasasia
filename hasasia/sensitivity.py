@@ -1151,7 +1151,7 @@ class Spectrum(object):
         Optionally supply an array of frequencies over which to build the
         various spectral densities.
     """
-    def __init__(self, psr, A_gwb, gamma_gwb, nf=400, fmin=None, fmax=2e-7,
+    def __init__(self, psr, amp_gw, gamma_gw, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, tm_fit=True, **Tf_kwargs):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
@@ -1165,8 +1165,8 @@ class Spectrum(object):
         else:
             self.K_inv = psr.K_inv
 
-        self.gamma_gwb = gamma_gwb
-        self.A_gwb = A_gwb
+        self.gamma_gwb = gamma_gw
+        self.A_gwb = amp_gw
 
         self.G = psr.G
         self.designmatrix = psr.designmatrix
