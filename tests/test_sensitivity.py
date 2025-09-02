@@ -35,7 +35,7 @@ def sc_simple():
 
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6e-16, gamma_gw=13/3.)
         _ = sp.NcalInv
         spectra.append(sp)
 
