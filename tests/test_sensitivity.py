@@ -175,10 +175,10 @@ def test_fim():
         spectra.append(sp)
 
     GWB_sens = hsen.GWBSensitivityCurve(spectra)
-    fim = GWB_sens.get_FIM_TMM(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
-    fim_diag = GWB_sens.get_FIM_TMM_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
-    fim_fastPTA = GWB_sens.get_FIM_fastPTA_Approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
-    fim_fastPTA_diag = GWB_sens.get_FIM_fastPTA_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim = get_FIM_TMM(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_diag = get_FIM_TMM_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_fastPTA = get_FIM_fastPTA_Approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_fastPTA_diag = get_FIM_fastPTA_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
 
     var_hc_tmm = hsen.get_var_hc(GWB_sens, fim, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
     var_hc_tmm_diag = hsen.get_var_hc(GWB_sens, fim_diag, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
