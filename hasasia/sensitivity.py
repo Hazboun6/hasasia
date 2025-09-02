@@ -13,7 +13,6 @@ import jax.scipy as jsc
 from functools import cached_property, partial
 import hasasia
 from .utils import create_design_matrix, theta_phi_to_SkyCoord, skycoord_to_Jname
-
 current_path = os.path.abspath(hasasia.__path__[0])
 sc_dir = os.path.join(current_path,'sensitivity_curves/')
 
@@ -287,6 +286,525 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(np.diag(TfN)) / get_Tspan([psr])
     
 
+def get_KIJ_Inv(spectra:list, rn_psrs:dict):
+    r"""Timing model marginalized inverse covariance matrix.
+
+    .. math::
+    [K^{-1}]_{IJ} \equiv G_{I} [(G^{T} C G)^{-1}]_{IJ} G_{J}^{T}
+    - [(G^{T} C G)]_{IJ} = G_{I}^{T} (C^{h}_{IJ} + \delta_{IJ}N_{I})G_{J}
+    """
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+
+    gwb = red_noise_powerlaw(A=spectra[0].A_gwb, gamma=spectra[0].gamma_gwb, freqs=spectra[0].freqs)
+
+    #TMM block noise covariance
+    K_IJ_block = np.empty((Npsrs, Npsrs), dtype=object)
+    G_dims = []
+    II = 0
+    #for-loop to go over every unique pair and diagonal element
+    for I, J in pairs:
+        Chi_IJ = HD([spectra[I].phi, spectra[J].phi], [spectra[I].theta, spectra[J].theta])
+        #Signal covariance matrix for single pulsar pair, strictly for the off-diagonal terms
+        Ch_IJ = Chi_IJ * corr_from_psdIJ(freqs=spectra[0].freqs, psd=gwb, toasI=spectra[I].toas, toasJ=spectra[J].toas)
+
+        K_off_diag = jnp.matmul(spectra[I].G.T, jnp.matmul(Ch_IJ, spectra[J].G))    
+        K_IJ_block[I,J] = K_off_diag
+        K_IJ_block[J,I] = K_off_diag.T
+
+        #diagonal entries
+        if II < Npsrs:
+            plaw = gwb
+            C = spectra[II].N
+            if spectra[II].name in rn_psrs.keys():
+                Amp, gam = rn_psrs[spectra[II].name]
+                plaw += red_noise_powerlaw(A=Amp, gamma=gam, freqs=spectra[0].freqs)
+
+            C += corr_from_psd(freqs=spectra[0].freqs, psd=plaw, toas=spectra[II].toas)
+
+            K_IJ_block[II,II] = jnp.matmul(spectra[II].G.T, jnp.matmul(C, spectra[II].G))
+            G_dims.append(spectra[II].G.shape[1])
+            II += 1
+
+    
+    #convert TMM block noise covariance to TMM noise covariance
+    K_IJ = np.zeros((sum(G_dims), sum(G_dims)), dtype=np.float64)
+    row_start = 0
+    for i in range(Npsrs):  
+        col_start = 0
+        for j in range(Npsrs): 
+            K_IJ[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]] = K_IJ_block[i,j]
+            K_IJ_block[i,j] = 0
+            col_start += G_dims[j]  
+        row_start += G_dims[i]  
+
+    del K_IJ_block
+
+    #computes TMM inverse noise covariance
+    KIJ_Inv = np.linalg.inv(K_IJ)
+    return KIJ_Inv
+
+
+def get_KII_Inv(spectra:list, rn_psrs:dict):
+    r"""Timing model marginalized inverse covariance matrix with diagonal approximation.
+
+    .. math::
+    [K^{-1}]_{II} \equiv G_{I} [(G^{T} C G)^{-1}]_{II} G_{I}^{T}
+    """
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    G_dims = []
+
+    for i in range(Npsrs):
+        G_dims.append(spectra[i].G.shape[1])
+
+
+    KIJ_Inv = np.zeros((sum(G_dims), sum(G_dims)), dtype=np.float64)
+    row_start=0
+    for i in range(Npsrs):  
+        if not hasattr(spectra[i], 'K_Inv'):
+            K = jnp.matmul(spectra[i].G.T, jnp.matmul(spectra[i].N, spectra[i].G))
+            K_Inv = jnp.linalg.inv(K)
+            KIJ_Inv[row_start:row_start + G_dims[i], row_start:row_start + G_dims[i]] = K_Inv
+
+        else:                     
+            KIJ_Inv[row_start:row_start + G_dims[i], row_start:row_start + G_dims[i]] = spectra[i].K_Inv
+        
+        row_start += G_dims[i]  
+
+    return KIJ_Inv
+
+
+def get_NcalInv_IJ(spectra:list, rn_psrs:dict):
+    r"""Timing model marginalized inverse noise-weighted transmission function
+    """
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    freqs = spectra[0].freqs
+    Tspan = get_Tspan(spectra)
+
+    G_dims = []
+    for I in range(Npsrs):
+        G_dims.append(spectra[I].G.shape[1])
+
+    KIJ_Inv_block = np.empty((Npsrs, Npsrs), dtype=object)
+    KIJ_Inv = get_KIJ_Inv(spectra, rn_psrs)
+
+    row_start = 0
+    for i in range(Npsrs):  
+        col_start = 0
+        for j in range(Npsrs):
+            KIJ_Inv_block[i,j] = KIJ_Inv[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]]
+            col_start += G_dims[j]  
+        row_start += G_dims[i]
+    del KIJ_Inv
+
+    NcalInvIJ = np.zeros((Npsrs, Npsrs, freqs.size))
+
+    II = 0
+    for I,J in pairs:
+        GtildeI = np.zeros((freqs.size, spectra[I].G.shape[1]),dtype='complex128')
+        GtildeI = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[I].toas),spectra[I].G)
+
+        GtildeJ = np.zeros((freqs.size, spectra[J].G.shape[1]),dtype='complex128')
+        GtildeJ = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[J].toas),spectra[J].G)
+
+        
+        NcalInvIJ_entry = jnp.matmul(jnp.conjugate(GtildeI),jnp.matmul(KIJ_Inv_block[I,J],GtildeJ.T)) / 2
+
+        KIJ_Inv_block[I,J] = 0
+
+        NcalInvJI_entry = jnp.conjugate(NcalInvIJ_entry).T
+ 
+        NcalInvIJ[I,J,:] = np.real(np.diag(NcalInvIJ_entry)) / Tspan
+        del NcalInvIJ_entry 
+        NcalInvIJ[J,I,:] = np.real(np.diag(NcalInvJI_entry)) / Tspan
+        del NcalInvJI_entry 
+
+        if II < Npsrs:    
+            GtildeII = np.zeros((freqs.size, spectra[II].G.shape[1]),dtype='complex128')
+            GtildeII = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[II].toas),spectra[II].G)
+
+            NcalInvII_entry = jnp.matmul(jnp.conjugate(GtildeII),jnp.matmul(KIJ_Inv_block[II,II],GtildeII.T)) / 2
+
+            KIJ_Inv_block[II,II] = 0
+
+            NcalInvIJ[II,II,:] = np.real(np.diag(NcalInvII_entry)) / Tspan
+            del NcalInvII_entry
+
+            II+=1
+
+    del KIJ_Inv_block
+
+    return NcalInvIJ
+
+
+def get_FIM_fastPTA_Approx(spectra:list, gamma_gwb:float, A_gwb:float, rn_psrs:dict):
+    r"""
+    Fisher information matrix from Babak et. al . See Equation (26) in `[2]`_.
+
+    .. math::
+        \mathcal{F}_{\alpha, \beta} = \sum_{i}\frac{1}{2} \mathrm{Tr} \left[ \tilde{C}^{-1}(f_i) \partial_{\alpha}\tilde{C}^{h}(f_i)  \tilde{C}(f_i)^{-1} \partial_{\beta}\tilde{C}^{h}(f_i) \right]
+
+    .. _[2]: https://arxiv.org/abs/2404.02864
+    """
+
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    freqs = spectra[0].freqs
+    Tspan = get_Tspan(spectra)
+
+    RIJ = np.zeros((Npsrs, Npsrs, freqs.size), dtype=np.float64)
+
+    II = 0
+    for I, J in pairs:
+        #spectra pulsars
+        
+        TIJ = min(get_Tspan([spectra[I]]), get_Tspan([spectra[J]]))
+        Chi_IJ = HD([spectra[I].phi, spectra[J].phi], [spectra[I].theta, spectra[J].theta])
+
+        #response tensors
+        RIJ[I,J,:] = Chi_IJ* np.sqrt(spectra[I].Tf*spectra[J].Tf*TIJ/Tspan)
+        RIJ[J,I,:] = RIJ[I,J,:]
+
+        #conditional for diagonal elements
+        if II < Npsrs:
+            RIJ[II,II,:] = np.sqrt(spectra[II].Tf**2*get_Tspan([spectra[II]])/Tspan)
+            II += 1
+
+    gwb = red_noise_powerlaw(A=A_gwb, gamma=gamma_gwb, freqs=freqs)
+    der_psd_log10A = 2*np.log(10) * gwb
+    der_psd_gamma = np.log(fyr/freqs) * gwb
+
+    NcalhIJ_gamma = der_psd_gamma * RIJ
+    NcalhIJ_log10A = der_psd_log10A * RIJ
+    NcalInvIJ = get_NcalInv_IJ(spectra, rn_psrs)
+
+    F_fastPTA = np.zeros((2, 2), dtype=np.float64)
+    F_fastPTA[0,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_gamma, NcalhIJ_gamma))
+    F_fastPTA[1,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_log10A, NcalhIJ_log10A))
+    F_fastPTA[0,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_gamma, NcalhIJ_log10A))
+    F_fastPTA[1,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_log10A, NcalhIJ_gamma))
+
+    return F_fastPTA
+
+
+def get_FIM_TMM(spectra:list, gamma_gwb:float, A_gwb:float, rn_psrs:dict):
+    r"""
+    Fisher information matrix from utilizing the timing model marginalized inverse covariance matrix.
+    """
+
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    freqs = spectra[0].freqs
+    Tspan = get_Tspan(spectra)
+
+    G_dims = []
+    for I in range(Npsrs):
+        G_dims.append(spectra[I].G.shape[1])
+
+    gwb = red_noise_powerlaw(A=A_gwb, gamma=gamma_gwb, freqs=freqs)
+    der_psd_log10A = 2*np.log(10) * gwb
+    der_psd_gamma = np.log(fyr/freqs) * gwb
+
+    KhIJ_block_gam = np.empty((Npsrs, Npsrs), dtype=object)
+    KhIJ_block_log10A = np.empty((Npsrs, Npsrs), dtype=object)
+
+    II = 0
+    for I, J in pairs:
+        Chi_IJ = HD([spectra[I].phi, spectra[J].phi], [spectra[I].theta, spectra[J].theta])
+        
+        #Signal covariance matrix for single pulsar pair, strictly for the off-diagonal terms
+        Ch_IJ_log10A = Chi_IJ * corr_from_psdIJ(freqs=freqs, psd=der_psd_log10A, toasI=spectra[I].toas, toasJ=spectra[J].toas)
+        #must use trapz integration due to instability of integral 
+        Ch_IJ_gam = Chi_IJ * corr_from_psdIJ(freqs=freqs, psd=der_psd_gamma, toasI=spectra[I].toas, toasJ=spectra[J].toas, fast=False)
+
+        Kh_off_diag_log10A = jnp.matmul(spectra[I].G.T, jnp.matmul(Ch_IJ_log10A, spectra[J].G))
+        Kh_off_diag_gam = jnp.matmul(spectra[I].G.T, jnp.matmul(Ch_IJ_gam, spectra[J].G))
+        
+        KhIJ_block_gam[I,J] = Kh_off_diag_gam
+        KhIJ_block_gam[J,I] = Kh_off_diag_gam.T
+
+        KhIJ_block_log10A[I,J] = Kh_off_diag_log10A
+        KhIJ_block_log10A[J,I] = Kh_off_diag_log10A.T
+    
+        #conditional built into using pairs to also do the diagonal entries
+        if II < Npsrs:
+            Ch_gam = corr_from_psd(freqs=freqs, psd=der_psd_gamma,
+                                toas=spectra[II].toas, fast=False)
+            Ch_log10A = corr_from_psd(freqs=freqs, psd=der_psd_log10A,
+                                toas=spectra[II].toas)
+            
+            KhIJ_block_gam[II,II] = jnp.matmul(spectra[II].G.T, jnp.matmul(Ch_gam, spectra[II].G))
+            KhIJ_block_log10A[II,II] = jnp.matmul(spectra[II].G.T, jnp.matmul(Ch_log10A, spectra[II].G))
+            II += 1
+
+    
+
+    KhIJ_gam = np.zeros((sum(G_dims), sum(G_dims)), dtype=np.float64)
+    KhIJ_log10A = np.zeros((sum(G_dims), sum(G_dims)), dtype=np.float64)
+
+    row_start = 0
+    for i in range(Npsrs):  
+        col_start = 0
+        for j in range(Npsrs): 
+            KhIJ_gam[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]] = KhIJ_block_gam[i,j]
+            KhIJ_block_gam[i,j] = 0
+
+            KhIJ_log10A[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]] = KhIJ_block_log10A[i,j]
+            KhIJ_block_log10A[i,j] = 0
+
+            col_start += G_dims[j]  
+        row_start += G_dims[i]
+
+
+    KIJ_Inv = get_KIJ_Inv(spectra, rn_psrs)
+    KIJ_Inv2 = jnp.matmul(KIJ_Inv, KIJ_Inv)  
+    del KIJ_Inv
+
+    term1_gamma = jnp.matmul(KIJ_Inv2, KhIJ_gam)
+    term1_log10A = jnp.matmul(KIJ_Inv2, KhIJ_log10A)
+
+    result_gam_block = np.empty((Npsrs, Npsrs), dtype=object)
+    result_log10A_block = np.empty((Npsrs, Npsrs), dtype=object)
+
+    row_start = 0
+    for i in range(Npsrs):  
+        col_start = 0
+        for j in range(Npsrs):
+            result_gam_block[i,j] = term1_gamma[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]]
+            result_log10A_block[i,j] = term1_log10A[row_start:row_start + G_dims[i], col_start:col_start + G_dims[j]]
+            col_start += G_dims[j]  
+        row_start += G_dims[i]
+
+    
+    NcalInvIJ = get_NcalInv_IJ(spectra, rn_psrs)
+
+    NcalhIJ_gamma = np.zeros((Npsrs, Npsrs, freqs.size))
+    NcalhIJ_log10A = np.zeros((Npsrs, Npsrs, freqs.size))
+    II = 0
+
+    for I,J in pairs:
+        GtildeI = np.zeros((freqs.size, spectra[I].G.shape[1]),dtype='complex128')
+        GtildeI = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[I].toas),spectra[I].G)
+
+        GtildeJ = np.zeros((freqs.size, spectra[J].G.shape[1]),dtype='complex128')
+        GtildeJ = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[J].toas),spectra[J].G)
+
+        result_gammaIJ = jnp.matmul(jnp.conjugate(GtildeI),jnp.matmul(result_gam_block[I,J],GtildeJ.T)) / 2
+        result_gammaJI = jnp.conjugate(result_gammaIJ).T
+
+        NcalhIJ_gamma[I,J] = np.real(np.diag(result_gammaIJ)) / Tspan * 1/(NcalInvIJ[I,J]**2)
+        NcalhIJ_gamma[J,I] = np.real(np.diag(result_gammaJI)) / Tspan * 1/(NcalInvIJ[J,I]**2)
+
+        result_log10AIJ = jnp.matmul(jnp.conjugate(GtildeI),jnp.matmul(result_log10A_block[I,J],GtildeJ.T)) / 2
+        result_log10AJI = jnp.conjugate(result_log10AIJ).T
+
+        NcalhIJ_log10A[I,J] = np.real(np.diag(result_log10AIJ)) / Tspan * 1/(NcalInvIJ[I,J]**2)
+        NcalhIJ_log10A[J,I] = np.real(np.diag(result_log10AJI)) / Tspan * 1/(NcalInvIJ[J,I]**2)
+
+
+        if II < Npsrs:
+            GtildeII = np.zeros((freqs.size, spectra[II].G.shape[1]),dtype='complex128')
+            GtildeII = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[II].toas),spectra[II].G)
+
+            result_gammaII = jnp.matmul(jnp.conjugate(GtildeII),jnp.matmul(result_gam_block[II,II],GtildeII.T)) / 2
+            NcalhIJ_gamma[II,II] = np.real(np.diag(result_gammaII)) / Tspan * 1/(NcalInvIJ[II,II]**2)
+            
+            result_log10AII = jnp.matmul(jnp.conjugate(GtildeII),jnp.matmul(result_log10A_block[II,II],GtildeII.T)) / 2
+            NcalhIJ_log10A[II,II] = np.real(np.diag(result_log10AII)) / Tspan * 1/(NcalInvIJ[II,II]**2)
+        
+            II+=1 
+
+    F_TMM_hsen = np.zeros((2, 2), dtype=np.float64)
+    F_TMM_hsen[0,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_gamma, NcalhIJ_gamma))
+    F_TMM_hsen[1,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_log10A, NcalhIJ_log10A))
+    F_TMM_hsen[0,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_gamma, NcalhIJ_log10A))
+    F_TMM_hsen[1,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvIJ, NcalInvIJ, NcalhIJ_log10A, NcalhIJ_gamma))
+
+    return F_TMM_hsen
+
+def get_FIM_TMM_diag_approx(spectra:list, gamma_gwb:float, A_gwb:float, rn_psrs:dict):
+    """Fisher information matrix from the timing model marginalized inverse covariance as a diagonal approximation
+    """
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    freqs = spectra[0].freqs
+    Tspan = get_Tspan(spectra)
+
+    gwb = red_noise_powerlaw(A=A_gwb, gamma=gamma_gwb, freqs=freqs)
+    der_psd_log10A = 2*np.log(10) * gwb
+    der_psd_gamma = np.log(fyr/freqs) * gwb
+
+    KhIJ_block_gamma = []
+    KhIJ_block_log10A = []
+
+    G_dims = []
+    for i in range(Npsrs):
+        G_dims.append(spectra[i].G.shape[1])
+
+    for i in range(Npsrs):
+        Ch_log10A = corr_from_psd(freqs=freqs, psd=der_psd_log10A, toas=spectra[i].toas)    
+        Ch_gamma = corr_from_psd(freqs=freqs, psd=der_psd_gamma, toas=spectra[i].toas, fast=False)
+
+        Kh_log10A_val = jnp.matmul(spectra[i].G.T, jnp.matmul(Ch_log10A, spectra[i].G))
+        Kh_gam_val = jnp.matmul(spectra[i].G.T, jnp.matmul(Ch_gamma, spectra[i].G))
+
+        KhIJ_block_gamma.append(Kh_gam_val)
+        KhIJ_block_log10A.append(Kh_log10A_val)
+        
+    KIJ_Inv = get_KII_Inv(spectra, rn_psrs)
+    KIJ_Inv2 = jnp.matmul(KIJ_Inv, KIJ_Inv)
+    del KIJ_Inv  
+    
+    KIJ_Inv2_block = []
+    row_start = 0
+    for i in range(Npsrs):
+        KIJ_Inv2_block.append(KIJ_Inv2[row_start:row_start + G_dims[i], row_start:row_start + G_dims[i]])
+        row_start += G_dims[i] 
+    del KIJ_Inv2
+
+    NcalhIJ_gamma = []
+    NcalhIJ_log10A = []
+    NcalInv_II = []
+    for i in range(Npsrs):
+        term1_gamma = jnp.matmul(KIJ_Inv2_block[i], KhIJ_block_gamma[i])
+        term1_log10A = jnp.matmul(KIJ_Inv2_block[i], KhIJ_block_log10A[i])
+        KIJ_Inv2_block[i] = 0
+        GtildeI = np.zeros((freqs.size, spectra[i].G.shape[1]),dtype='complex128')
+        GtildeI = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*spectra[i].toas),spectra[i].G)
+
+        result_gamma = jnp.matmul(jnp.conjugate(GtildeI),jnp.matmul(term1_gamma,GtildeI.T)) / 2
+        result_log10A = jnp.matmul(jnp.conjugate(GtildeI),jnp.matmul(term1_log10A,GtildeI.T)) / 2
+        
+        NcalInvI = spectra[i].NcalInv * get_Tspan([spectra[i]]) / Tspan
+
+        result_1_gamma = np.real(np.diag(result_gamma)) / Tspan * 1/(NcalInvI**2)
+        result_1_log10A = np.real(np.diag(result_log10A)) / Tspan * 1/(NcalInvI**2)
+
+        NcalhIJ_gamma.append(result_1_gamma)
+        NcalhIJ_log10A.append(result_1_log10A)
+        NcalInv_II.append(NcalInvI) 
+    del KIJ_Inv2_block
+
+
+    F_TMM_hsen = np.zeros((2, 2), dtype=np.float64)
+    for i in range(Npsrs):
+        F_TMM_hsen[0,0] = np.sum(NcalInv_II[i]*NcalhIJ_gamma[i]*NcalInv_II[i]*NcalhIJ_gamma[i])
+        F_TMM_hsen[0,1] = np.sum(NcalInv_II[i]*NcalhIJ_gamma[i]*NcalInv_II[i]*NcalhIJ_log10A[i])
+        F_TMM_hsen[1,1] = np.sum(NcalInv_II[i]*NcalhIJ_log10A[i]*NcalInv_II[i]*NcalhIJ_log10A[i])
+        F_TMM_hsen[1,0] = F_TMM_hsen[0,1] 
+    return F_TMM_hsen
+
+
+def get_FIM_fastPTA_diag_approx(spectra:list, gamma_gwb:float, A_gwb:float, rn_psrs:dict):
+    """Fisher information matrix from Babak et. al. using the diagonal approximation
+    """
+    Npsrs = len(spectra)
+    psr_idx = np.arange(Npsrs)
+    pairs = list(it.combinations(psr_idx,2))
+    freqs = spectra[0].freqs
+    Tspan = get_Tspan(spectra)
+    
+    NcalInvII_TMM = np.zeros((Npsrs, Npsrs, freqs.size), dtype=np.float64)
+
+    for i in range(Npsrs):
+        NcalInvII_TMM[i,i] = spectra[i].NcalInv * get_Tspan([spectra[i]])/Tspan
+
+
+    RIJ = np.zeros((Npsrs, Npsrs, freqs.size), dtype=np.float64)
+
+    II = 0
+    for I, J in pairs:
+        #spectra pulsars
+        
+        TIJ = min(get_Tspan([spectra[I]]), get_Tspan([spectra[J]]))
+        Chi_IJ = HD([spectra[I].phi, spectra[J].phi], [spectra[I].theta, spectra[J].theta])
+
+        #response tensors
+        RIJ[I,J,:] = Chi_IJ* np.sqrt(spectra[I].Tf*spectra[J].Tf*TIJ/Tspan)
+        RIJ[J,I,:] = RIJ[I,J,:]
+
+        #conditional for diagonal elements
+        if II < Npsrs:
+            RIJ[II,II,:] = np.sqrt(spectra[II].Tf**2*get_Tspan([spectra[II]])/Tspan)
+            II += 1
+
+    gwb = red_noise_powerlaw(A=A_gwb, gamma=gamma_gwb, freqs=freqs)
+    der_psd_log10A = 2*np.log(10) * gwb
+    der_psd_gamma = np.log(fyr/freqs) * gwb
+
+    NcalhIJ_gamma = der_psd_gamma * RIJ
+    NcalhIJ_log10A = der_psd_log10A * RIJ
+
+    F_fastPTA = np.zeros((2, 2), dtype=np.float64)
+    F_fastPTA[0,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f', NcalInvII_TMM,  NcalInvII_TMM, NcalhIJ_gamma, NcalhIJ_gamma))
+    F_fastPTA[1,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f',  NcalInvII_TMM, NcalInvII_TMM, NcalhIJ_log10A, NcalhIJ_log10A))
+    F_fastPTA[0,1] = np.sum(np.einsum('ijf, klf, jkf, lif->f',  NcalInvII_TMM, NcalInvII_TMM, NcalhIJ_gamma, NcalhIJ_log10A))
+    F_fastPTA[1,0] = np.sum(np.einsum('ijf, klf, jkf, lif->f',  NcalInvII_TMM,  NcalInvII_TMM, NcalhIJ_log10A, NcalhIJ_gamma))
+
+    return F_fastPTA
+
+
+def get_var_hc(sens_obj, fim, gamma_gwb_mean, log10A_gwb_mean):
+    """_summary_: computes variance in characteristic strain using error propagation
+    """
+    partial_hc_gamma, partial_hc_log10A = sens_obj.partial_hc()
+
+    model_cov = jnp.linalg.inv(fim)
+    sigma_frac_squared_gamma = model_cov[0,0]
+    sigma_frac_squared_log10A = model_cov[1,1]
+    var_frac_gamma_log10A = model_cov[0,1]
+
+    sigma_gamma = np.sqrt(sigma_frac_squared_gamma) * gamma_gwb_mean
+    sigma_log10A = np.sqrt(sigma_frac_squared_log10A) * log10A_gwb_mean
+    var_gamma_log10A = var_frac_gamma_log10A *gamma_gwb_mean * log10A_gwb_mean
+
+    var_hc = (partial_hc_gamma*sigma_gamma)**2 + (partial_hc_log10A*sigma_log10A)**2 + 2*partial_hc_gamma*partial_hc_log10A*var_gamma_log10A
+
+    return var_hc            
+            
+
+def get_partial_SInv(psr, param, gamma_gwb, A_gwb, freqs):
+    """Partial derivative with respect to model parameters of the the noise psd
+    """
+    gwb_psd = red_noise_powerlaw(A=A_gwb, gamma=gamma_gwb, freqs=freqs)
+
+    if param == 'log10A':
+        der_psd =  gwb_psd * 2 * np.log(10) 
+
+    elif param == 'gamma':
+        der_psd = gwb_psd * np.log(fyr/freqs)
+
+    else:
+        raise AttributeError("Params must be gamma or log10A")
+    
+    #derivative of the time-domain signal covariance matrix, and must be slow due to inverse stability
+    Ch_der = corr_from_psd(psd = der_psd, freqs=freqs, toas = psr.toas, fast=False)
+
+    K_der = jnp.matmul(psr.G.T, jnp.matmul(Ch_der, psr.G))
+
+    K = jnp.matmul(psr.G.T, jnp.matmul(psr.N, psr.G))
+    K_inv = jnp.linalg.inv(K)
+    K_inv_squared = jnp.matmul(K_inv, K_inv)
+    del K_inv
+
+    result = jnp.matmul(K_inv_squared, K_der)
+
+    Gtilde = np.zeros((freqs.size,psr.G.shape[1]),dtype='complex128')
+    Gtilde = np.dot(np.exp(1j*2*np.pi*freqs[:,np.newaxis]*psr.toas),psr.G)
+
+
+    TfN = jnp.matmul(np.conjugate(Gtilde),jnp.matmul(result,Gtilde.T)) / 2
+    
+    return -np.real(np.diag(TfN)) / get_Tspan([psr]) * resid_response(freqs=freqs)
+
+
 @partial(jax.jit, static_argnames=['full_matrix', 'return_Gtilde_Ncal'])
 def get_NcalInv_RRF(K_inv: jax.Array, G: jax.Array, phi:jax.Array, J: jax.Array,
                     Z: jax.Array, freqs: jax.Array, toas:jax.Array, full_matrix=False, return_Gtilde_Ncal=False):
@@ -376,10 +894,10 @@ class Pulsar(object):
         self.toaerrs = toaerrs
         self.phi = phi
         self.theta = theta
-        self.name = name
         self.pdist = make_quant(pdist,'kpc')
         self.A_rn = A_rn
         self.alpha = alpha
+        self.name = name
 
         if name is None:
             try:
@@ -633,17 +1151,22 @@ class Spectrum(object):
         Optionally supply an array of frequencies over which to build the
         various spectral densities.
     """
-    def __init__(self, psr, nf=400, fmin=None, fmax=2e-7,
+    def __init__(self, psr, amp_gw, gamma_gw, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, tm_fit=True, **Tf_kwargs):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
         self.toaerrs = psr.toaerrs
         self.phi = psr.phi
         self.theta = psr.theta
+        self.name = psr.name  
+        
         if hasattr(psr, 'N'):
             self.N = psr.N
         else:
             self.K_inv = psr.K_inv
+
+        self.gamma_gwb = gamma_gw
+        self.A_gwb = amp_gw
 
         self.G = psr.G
         self.designmatrix = psr.designmatrix
@@ -725,8 +1248,24 @@ class Spectrum(object):
         if not hasattr(self, '_S_I'):
             self._S_I = 1/resid_response(self.freqs)/self.NcalInv
         return self._S_I
+    
+    @property
+    def partial_gamma_SI_Inv(self):
+        """partial derivative of the noise psd with respect to gamma
+        """
+        if not hasattr(self, '_partial_gamma_SI_Inv'):
+            self._partial_gamma_SI_Inv = get_partial_SInv(self, param='gamma', gamma_gwb=self.gamma_gwb, A_gwb = self.A_gwb, freqs=self.freqs)
+        return self._partial_gamma_SI_Inv
 
     @property
+    def partial_log10A_SI_Inv(self):
+        """partial derivative of the noise psd with respect to log10A
+        """
+        if not hasattr(self, '_partial_log10A_SI_Inv'):
+            self._partial_log10A_SI_Inv = get_partial_SInv(self, param='log10A', gamma_gwb=self.gamma_gwb, A_gwb = self.A_gwb, freqs=self.freqs)
+        return self._partial_log10A_SI_Inv
+
+    @property   
     def S_R(self):
         r"""Residual power sensitivity for this pulsar.
 
@@ -831,23 +1370,20 @@ class Spectrum(object):
         """  
         with h5py.File(dir, 'a') as f:
             hdf5_psr = f.create_group(self.name)
-            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, 
-                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
             hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
-            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, 
-                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('toaerrs', self.toaerrs.shape,self.toaerrs.dtype, data=self.toaerrs, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            hdf5_psr.create_dataset('Mmat', self.designmatrix.shape, self.designmatrix.dtype, data=self.designmatrix, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('partial_gamma_SI_Inv', self.partial_gamma_SI_Inv.shape, self.partial_gamma_SI_Inv.dtype, data=self.partial_gamma_SI_Inv, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('partial_log10A_SI_Inv', self.partial_log10A_SI_Inv.shape, self.partial_log10A_SI_Inv.dtype, data=self.partial_log10A_SI_Inv, compression="gzip", compression_opts=compress_val)
             f.flush()
 
 
@@ -1173,25 +1709,21 @@ class Spectrum_RRF(object):
         """  
         with h5py.File(dir, 'a') as f:
             hdf5_psr = f.create_group(self.name)
-            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, 
-                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('toas', self.toas.shape, self.toas.dtype, data=self.toas, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('freqs', self.freqs.shape,self.freqs.dtype, data=self.freqs, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('phi', (1,), float, data=self.phi)
             hdf5_psr.create_dataset('theta', (1,), float, data=self.theta)
-            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, 
-                                    compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, 
-                                    compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('NcalInv', self.NcalInv.shape, self.NcalInv.dtype, data=self.NcalInv, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('S_I', self.S_I.shape, self.S_I.dtype, data=self.S_I, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('G', self.G.shape, self.G.dtype, data=self.G, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('toaerrs', self.toaerrs.shape,self.toaerrs.dtype, data=self.toaerrs, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            hdf5_psr.create_dataset('Mmat', self.designmatrix.shape, self.designmatrix.dtype, data=self.designmatrix, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('partial_gamma_SI_Inv', self.partial_gamma_SI_Inv.shape, self.partial_gamma_SI_Inv.dtype, data=self.partial_gamma_SI_Inv, compression="gzip", compression_opts=compress_val)
+            hdf5_psr.create_dataset('partial_log10A_SI_Inv', self.partial_log10A_SI_Inv.shape, self.partial_log10A_SI_Inv.dtype, data=self.partial_log10A_SI_Inv, compression="gzip", compression_opts=compress_val)
             f.flush()
-
 
 class SensitivityCurve(object):
     r"""
@@ -1305,6 +1837,8 @@ class GWBSensitivityCurve(SensitivityCurve):
 
         self.T_IJ = np.array([get_TspanIJ(spectra[ii],spectra[jj])
                               for ii,jj in zip(self.pairs[0],self.pairs[1])])
+        
+        self.spectra = spectra
 
     def SNR(self, Sh):
         """
@@ -1341,7 +1875,40 @@ class GWBSensitivityCurve(SensitivityCurve):
                                      / num[:,np.newaxis])
 
         return self._S_effIJ
+    
+    def partial_hc(self):
+        """_summary_
+        """
+        Tspan = get_Tspan(self.spectra)
+        psr_idx = np.arange(self.phis.size)
+        pairs = list(it.combinations(psr_idx,2))
 
+        vals_gamma = 0
+        vals_log10A = 0
+
+        for I,J in pairs:
+            Tspan_IJ = np.amax([self.spectra[I].toas.min(),self.spectra[J].toas.min()]) - np.amin([self.spectra[I].toas.max(),self.spectra[J].toas.max()])
+            Chi_IJ = HD(thetas=[self.spectra[I].theta, self.spectra[J].theta], phis=[self.spectra[I].phi, self.spectra[J].phi])
+            #computing hc_partial with respect to gamma
+            vals_gamma = vals_gamma + Chi_IJ**2 * Tspan_IJ/Tspan * (
+            self.spectra[I].partial_gamma_SI_Inv * 1/self.spectra[J].S_I + self.spectra[J].partial_gamma_SI_Inv * 1/self.spectra[I].S_I)
+
+            #computing hc_partial with respect to log10A
+            vals_log10A = vals_log10A + Chi_IJ**2 * Tspan_IJ/Tspan * (
+            self.spectra[I].partial_log10A_SI_Inv * 1/self.spectra[J].S_I + self.spectra[J].partial_log10A_SI_Inv * 1/self.spectra[I].S_I)
+
+        term_der_hc = -0.25 * self.freqs/self.h_c * self.S_eff**3
+
+        der_hc_gamma =  term_der_hc * vals_gamma
+        der_hc_log10A = term_der_hc * vals_log10A
+        
+        return der_hc_gamma, der_hc_log10A
+    
+
+    def hc_var(self, fim, log10A_gwb_mean, gamma_gwb_mean):
+        return get_var_hc(self, fim, gamma_gwb_mean, log10A_gwb_mean)
+        
+        
 
 class DeterSensitivityCurve(SensitivityCurve):
     '''
@@ -1408,90 +1975,9 @@ class DeterSensitivityCurve(SensitivityCurve):
             self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff
 
-    @property
-    def NcalInvIJ(self):
-        """
-        Inverse Noise Weighted Transmission Function that includes
-        cross-correlation noise from GWB.
-        """
-        if not hasattr(self,'_NcalInvIJ'):
-            self._NcalInvIJ = get_NcalInvIJ(psrs=self.spectra,
-                                            A_GWB=self.A_GWB,
-                                            freqs=self.freqs,
-                                            full_matrix=True)
-
-        return self._NcalInvIJ
-
 
 def HD(phis,thetas):
     return HellingsDownsCoeff(np.array(phis),np.array(thetas))[1][0]
-
-
-def get_NcalInvIJ(psrs, A_GWB, freqs, full_matrix=False,
-                  return_Gtilde_Ncal=False):
-    r"""
-    Calculate the inverse-noise-wieghted transmission function for a given
-    pulsar. This calculates
-    :math:`\mathcal{N}^{-1}(f,f') , \; \mathcal{N}^{-1}(f)`
-    in `[1]`_, see Equations (19-20).
-
-    .. _[1]: https://arxiv.org/abs/1907.04341
-
-    Parameters
-    ----------
-
-    psrs : list of hasasia.Pulsar objects
-        List of hasasia.Pulsar objects to build NcalInvIJ
-
-
-    Returns
-    -------
-
-    inverse-noise-weighted transmission function across two pulsars.
-
-    """
-    Npsrs = len(psrs)
-    toas = np.concatenate([p.toas for p in psrs], axis=None)
-    # make filter
-    ff = np.tile(freqs, Npsrs)
-    ## CHANGE BACK
-    # G = sl.block_diag(*[G_matrix(p.designmatrix) for p in psrs])
-    G = sl.block_diag(*[np.eye(p.toas.size) for p in psrs])
-    Gtilde = np.zeros((ff.size, G.shape[1]), dtype='complex128')
-    #N_freqs x N_TOA-N_par
-
-    Gtilde = np.dot(np.exp(1j*2*np.pi*ff[:,np.newaxis]*toas),G)
-    # N_freq x N_TOA-N_par
-    #CHANGE BACK
-    # psd = red_noise_powerlaw(A=A_GWB, gamma=13./3, freqs=freqs)
-    psd = 2*(365.25*24*3600/40)*(1e-6)**2
-    Ch_blocks = [[(HD([pc.phi,pr.phi],[pc.theta,pr.theta])
-                   *corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
-                                    toasJ=pr.toas, fast=True))
-                  if r!=c
-                  else corr_from_psdIJ(freqs=freqs, psd=psd, toasI=pc.toas,
-                                       toasJ=pr.toas, fast=True)
-                  for r, pr in enumerate(psrs)]
-                  for c, pc in enumerate(psrs)]
-
-    C_h = np.block(Ch_blocks)
-
-    C_n = sl.block_diag(*[p.N for p in psrs])
-    # C_h = sl.block_diag(*[corr_from_psd(freqs=freqs, psd=psd,
-    #                                     toas=p.toas, fast=True) for p in psrs])
-    C = C_n + C_h
-    Ncal = jnp.matmul(G.T, jnp.matmul(C, G)) #N_TOA-N_par x N_TOA-N_par
-    NcalInv = np.linalg.inv(Ncal) #N_TOA-N_par x N_TOA-N_par
-
-    TfN = NcalInv#np.matmul(G, np.matmul(NcalInv, G.T))
-    #np.matmul(np.conjugate(Gtilde),np.matmul(NcalInv,Gtilde.T)) / 2
-
-    if return_Gtilde_Ncal:
-        return np.real(TfN), Gtilde, Ncal
-    elif full_matrix:
-        return np.real(TfN), toas, ChiIJ
-    else:
-        return np.real(np.diag(TfN)) / get_Tspan(psrs)
 
 
 def HellingsDownsCoeff(phi, theta, autocorr=False):
@@ -1746,7 +2232,7 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         t1, t2 = np.meshgrid(toas, toas, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+        return jnp.trapezoid(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
     """
@@ -1961,6 +2447,40 @@ def make_quant(param, default_unit):
         quantity = param * default_unit
 
     return quantity
+
+
+def spectra_h5_creation(dir:str, psr_names:list, gamma_gwb, A_gwb, freqs):
+    """converts h5 file of spectra objects back to list of spectrum objects
+    """
+    class h5_spectra:
+        def __init__(self, freqs, phi, theta, toas, pdist, toaerrs, N, G, S_I, designmatrix, partial_gamma_SI_Inv, partial_log10A_SI_Inv, name):
+            self.phi = phi
+            self.theta = theta
+            self.toas = toas
+            self.toaerrs = toaerrs
+            self.freqs = freqs
+            self.S_I = S_I
+            self.N = N
+            self.G = G
+            self.pdist = pdist
+            self.partial_gamma_SI_Inv = partial_gamma_SI_Inv
+            self.partial_log10A_SI_Inv = partial_log10A_SI_Inv
+            self.designmatrix = designmatrix
+            self.name = name
+            
+
+    spectra = []
+            
+    with h5py.File(dir, 'r') as f:
+        for name in psr_names:
+            psr_h5 = f[name]
+            psr = h5_spectra(freqs=freqs, theta=psr_h5['theta'][:][0], phi=psr_h5['phi'][:][0], S_I=psr_h5['S_I'][:], partial_gamma_SI_Inv=psr_h5['partial_gamma_SI_Inv'][:],
+                             partial_log10A_SI_Inv=psr_h5['partial_log10A_SI_Inv'][:], toas=psr_h5['toas'][:], toaerrs=psr_h5['toaerrs'][:], G=psr_h5['G'][:],
+                             N = psr_h5['N'][:], designmatrix=psr_h5['Mmat'][:], pdist=psr_h5['pdist'][:],  name=name)
+            spectra_psr = Spectrum(psr, freqs=psr.freqs, gamma_gwb=gamma_gwb, A_gwb=A_gwb)
+            spectra.append(spectra_psr)
+    return spectra
+
 
 ################## Pre-Made Sensitivity Curves#############
 def nanograv_11yr_deter():

@@ -53,13 +53,13 @@ def test_sensitivity_w_rednoise():
                          A_rn=A_rn,alpha=alphas,freqs=freqs)
     spectra2 = []
     for p in psrs2:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
         _ = sp.NcalInv
         spectra2.append(sp)
 
     spectra3 = []
     for p in psrs3:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
         _ = sp.NcalInv
         spectra3.append(sp)
 
@@ -67,7 +67,7 @@ def test_sensitivity_w_rednoise():
     Tspan = hsen.get_Tspan(psrs2)
     for p in psrs2:
         __ = p.K_inv
-        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
         _ = sp.NcalInv
         spectra2_RRF.append(sp)
 
@@ -75,7 +75,7 @@ def test_sensitivity_w_rednoise():
     Tspan = hsen.get_Tspan(psrs2)
     for p in psrs3:
         __ = p.K_inv
-        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=-13./3)
+        sp = hsen.Spectrum_RRF(p, Tspan=Tspan, freqs_gw_comp=14, freqs_irn_comp=30, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
         _ = sp.NcalInv
         spectra3_RRF.append(sp)
 
@@ -147,7 +147,7 @@ def test_nonGR():
                         phi=phi,theta=theta)
     spectra = []
     for p in psrs:
-        sp = hsen.Spectrum(p, freqs=freqs)
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
         _ = sp.NcalInv
         spectra.append(sp)
 
@@ -165,8 +165,25 @@ def test_PI_sensitivity(sc_simple):
     PI_sc, plaw = hsen.PI_hc(freqs=sc1a.freqs, Tspan=sc1a.Tspan,
                              SNR=3, S_eff=sc1a.S_eff, N=30)
 
-def test_get_NcalInvIJ():
+def test_fim():
     psrs = hsim.sim_pta(timespan=timespan, cad=23, sigma=1e-7,
                         phi=phi,theta=theta)
-    hsen.get_NcalInvIJ(psrs, 1e-15, freqs)
+    spectra = []
+    for p in psrs:
+        sp = hsen.Spectrum(p, freqs=freqs, amp_gw=6.4e-15, gamma_gw=13./3)
+        _ = sp.NcalInv
+        spectra.append(sp)
+
+    GWB_sens = hsen.GWBSensitivityCurve(spectra)
+    fim = GWB_sens.get_FIM_TMM(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_diag = GWB_sens.get_FIM_TMM_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_fastPTA = GWB_sens.get_FIM_fastPTA_Approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+    fim_fastPTA_diag = GWB_sens.get_FIM_fastPTA_diag_approx(GWB_sens.spectra, gamma_gwb=13./3, A_gwb = 6.4e-15, rn_psrs={})
+
+    var_hc_tmm = hsen.get_var_hc(GWB_sens, fim, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
+    var_hc_tmm_diag = hsen.get_var_hc(GWB_sens, fim_diag, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
+    var_hc_tmm_diag = hsen.get_var_hc(GWB_sens, fim_fastPTA, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
+    var_hc_tmm_diag = hsen.get_var_hc(GWB_sens, fim_fastPTA_diag, gamma_gwb_mean=13./3, log10A_gwb_mean= np.log10(6.4e-15))
+
+
 
