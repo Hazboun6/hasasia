@@ -31,6 +31,7 @@ __all__ =['GWBSensitivityCurve',
           'get_Tspan',
           'get_TspanIJ',
           'corr_from_psd',
+          'corr_from_psd_chrom',
           'quantize_fast',
           'red_noise_powerlaw',
           'Agwb_from_Seff_plaw',
@@ -2233,6 +2234,63 @@ def corr_from_psd(freqs, psd, toas, fast=True):
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return jnp.trapezoid(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
+
+def corr_from_psd_chrom(freqs, psd, toas, obs_freqs, chr_idx, fref=1400., fast=True):
+    """
+    Calculates the correlation matrix over a set of TOAs for a given power
+    spectral density.
+
+    Parameters
+    ----------
+
+    freqs : array
+        Array of freqs over which the psd is given.
+
+    psd : array
+        Power spectral density to use in calculation of correlation matrix.
+
+    toas : array
+        Pulsar times-of-arrival to use in correlation matrix.
+    
+    obs_freqs : array
+        observation frequency of each ToA
+        
+    chr_idx : float
+        Spectral index of the powerlaw amplitude. 2 for DM noise, 4 for Chrom.
+        
+    fref: float, optional
+        reference frequency for amplitude powerlaw. Usually set to 1400 MHz
+
+    fast : bool, optional
+        Fast mode uses a matix inner product, while the slower mode uses the
+        numpy.trapz function which is slower, but more accurate.
+
+    Returns
+    -------
+
+    corr : array
+        A 2-dimensional array which represents the correlation matrix for the
+        given set of TOAs.
+    """
+    
+    N_toa = len(toas)
+    matrix = np.ones((N_toa,N_toa))
+    
+    for i in range(N_toa):
+        matrix[i,:] = (fref/obs_freqs[i])**chr_idx
+    A_matrix = matrix*matrix.transpose()
+    
+    if fast:
+        df = np.diff(freqs)
+        df = np.append(df,df[-1])
+        tm = np.sqrt(psd*df)*np.exp(1j*2*np.pi*freqs*toas[:,np.newaxis])
+        integrand = np.matmul(tm, np.conjugate(tm.T))
+        return A_matrix*np.real(integrand)
+    else: #Makes much larger arrays, but uses np.trapz
+        t1, t2 = np.meshgrid(toas, toas, indexing='ij')
+        tm = np.abs(t1-t2)
+        integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
+        return A_matrix*np.trapz(integrand, axis=2, x=freqs)#np.sum(integrand,axis=2)#
 
 def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
     """
