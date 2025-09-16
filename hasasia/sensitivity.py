@@ -1975,6 +1975,14 @@ class DeterSensitivityCurve(SensitivityCurve):
             self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff
 
+    def SNR(self, h_0, f_0):
+        """
+        Calculate the signal-to-noise ratio for a deterministic signal
+        with strain given by h_0 at the frequency f_0.
+        """
+        indx_f_0 = np.abs(self.freqs-f_0).argmin()
+        SNR = h_0*np.sqrt(self.Tspan/self.S_eff[indx_f_0])
+        return SNR.to('').value
 
 def HD(phis,thetas):
     return HellingsDownsCoeff(np.array(phis),np.array(thetas))[1][0]
