@@ -748,6 +748,8 @@ class Spectrum(object):
         NcalInv_approx = Tf / P_noise
         # update with the setter defined above
         self.NcalInv = NcalInv_approx
+        # update S_I as well since this gets used in sensitivity curves (S_eff)
+        self.S_I = 1/resid_response(self.freqs)/self.NcalInv
 
         if return_NcalInv_approx:
             return self.NcalInv
@@ -772,6 +774,12 @@ class Spectrum(object):
         if not hasattr(self, '_S_I'):
             self._S_I = 1/resid_response(self.freqs)/self.NcalInv
         return self._S_I
+    
+    @S_I.setter
+    def S_I(self, value):
+        if value.shape != self.freqs.shape:
+            raise ValueError('Strain power sensitivity must have the same shape as freqs.')
+        self._S_I = value
 
     @property
     def S_R(self):
