@@ -1151,7 +1151,7 @@ class Spectrum(object):
         Optionally supply an array of frequencies over which to build the
         various spectral densities.
     """
-    def __init__(self, psr, amp_gw, gamma_gw, nf=400, fmin=None, fmax=2e-7,
+    def __init__(self, psr, amp_gw=None, gamma_gw=None, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, tm_fit=True, **Tf_kwargs):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
