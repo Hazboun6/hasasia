@@ -42,6 +42,8 @@ def test_get_sliced_spectra1(test_psrs):
     # Call the function with the mock data
     test_slices = hcast.get_sliced_spectra(
         psrs=test_psrs,
+        gamma_gwb=13/3,
+        A_gwb=6e-16,
         freqs=freqs,
         start_mjd=0.0,
         end_mjd=11.*365.25,
@@ -59,6 +61,8 @@ def test_get_sliced_spectra2(test_psrs):
     # Call the function with the mock data
     test_slices = hcast.get_sliced_spectra(
         psrs=test_psrs,
+        gamma_gwb=13/3.,
+        A_gwb=6e-16,
         freqs=freqs,
         start_mjd=0.0,
         end_mjd=14.0*365.25,

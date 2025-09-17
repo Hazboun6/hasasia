@@ -4,7 +4,7 @@ from hasasia import sensitivity as hsen
 
 yr_sec = 365.25*24*3600
 
-def get_sliced_spectra(psrs,
+def get_sliced_spectra(psrs, A_gwb, gamma_gwb,
                        freqs,
                        start_mjd=0.0,
                        end_mjd = 1_000_000,
@@ -17,6 +17,10 @@ def get_sliced_spectra(psrs,
     
     psrs : list of enterprise.Pulsar or list of hasasia.Pulsar objects
         List of enterprise/hasasia Pulsar objects
+
+    A_gwb : gravitational wave background spectral amplitude
+
+    gamma_gwb : gravitational wave background spectral index
 
     freqs : array
         Frequency array for the PTA in Hz
@@ -53,7 +57,7 @@ def get_sliced_spectra(psrs,
             psrs_post_cut.append(psr)
     spectra = []
     for _ , p in enumerate(psrs_post_cut):
-        sp = hsen.Spectrum(p,freqs=freqs)
+        sp = hsen.Spectrum(p,freqs=freqs, amp_gw=A_gwb, gamma_gw=gamma_gwb)
         sp.name = p.name
         _ = sp.NcalInv
         spectra.append(sp)
