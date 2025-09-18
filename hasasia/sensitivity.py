@@ -2275,7 +2275,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
 
-def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
+def quantize_fast(toas, toaerrs, flags=None, dt=0.1, flags_only=False):
     r"""
     Function to quantize and average TOAs by observation epoch. Used especially
     for NANOGrav multiband data.
@@ -2295,6 +2295,9 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
 
     dt : float
         Coarse graining time [days].
+
+    flags_only : bool, optional
+        Only return flags. Saves a big of time with many toas.
     """
     isort = np.argsort(toas)
 
@@ -2307,15 +2310,19 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
         else:
             bucket_ref.append(toas[i])
             bucket_ind.append([i])
-
-    avetoas = np.array([np.mean(toas[l]) for l in bucket_ind],'d')
-    avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind],'d')
     if flags is not None:
         aveflags = np.array([flags[l[0]] for l in bucket_ind])
+    if not flags_only:
+        avetoas = np.array([np.mean(toas[l]) for l in bucket_ind],'d')
+        avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind],'d')
 
-    U = np.zeros((len(toas),len(bucket_ind)),'d')
-    for i,l in enumerate(bucket_ind):
-        U[l,i] = 1
+        U = np.zeros((len(toas),len(bucket_ind)),'d')
+        for i,l in enumerate(bucket_ind):
+            U[l,i] = 1
+    elif flags_only:
+        U = None
+        avetoas = None
+        avetoaerrs = None
 
     if flags is not None:
         return avetoas, avetoaerrs, aveflags, U, bucket_ind
