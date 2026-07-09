@@ -1435,7 +1435,8 @@ class Spectrum(object):
             hdf5_psr.create_dataset('N', self.N.shape, self.N.dtype, data=self.N, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('Tf', self.Tf.shape, self.Tf.dtype, data=self.Tf, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('toaerrs', self.toaerrs.shape,self.toaerrs.dtype, data=self.toaerrs, compression="gzip", compression_opts=compress_val)
-            hdf5_psr.create_dataset('pdist', (2,), float, data=self.pdist)
+            pdist_val = np.atleast_1d(self.pdist.to('kpc').value if hasattr(self.pdist, 'to') else self.pdist)
+            hdf5_psr.create_dataset('pdist', pdist_val.shape, pdist_val.dtype, data=pdist_val)
             hdf5_psr.create_dataset('Mmat', self.designmatrix.shape, self.designmatrix.dtype, data=self.designmatrix, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('partial_gamma_SI_Inv', self.partial_gamma_SI_Inv.shape, self.partial_gamma_SI_Inv.dtype, data=self.partial_gamma_SI_Inv, compression="gzip", compression_opts=compress_val)
             hdf5_psr.create_dataset('partial_log10A_SI_Inv', self.partial_log10A_SI_Inv.shape, self.partial_log10A_SI_Inv.dtype, data=self.partial_log10A_SI_Inv, compression="gzip", compression_opts=compress_val)
@@ -2330,7 +2331,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
         return np.trapz(integrand, axis=2, x=freqs)
 
-def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
+def quantize_fast(toas, toaerrs, flags=None, dt=0.1, flags_only=False):
     r"""
     Function to quantize and average TOAs by observation epoch. Used especially
     for NANOGrav multiband data.
@@ -2350,6 +2351,9 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
 
     dt : float
         Coarse graining time [days].
+
+    flags_only : bool, optional
+        Only return flags. Saves a big of time with many toas.
     """
     isort = np.argsort(toas)
 
@@ -2362,15 +2366,19 @@ def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
         else:
             bucket_ref.append(toas[i])
             bucket_ind.append([i])
-
-    avetoas = np.array([np.mean(toas[l]) for l in bucket_ind],'d')
-    avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind],'d')
     if flags is not None:
         aveflags = np.array([flags[l[0]] for l in bucket_ind])
+    if not flags_only:
+        avetoas = np.array([np.mean(toas[l]) for l in bucket_ind],'d')
+        avetoaerrs = np.array([sps.hmean(toaerrs[l]) for l in bucket_ind],'d')
 
-    U = np.zeros((len(toas),len(bucket_ind)),'d')
-    for i,l in enumerate(bucket_ind):
-        U[l,i] = 1
+        U = np.zeros((len(toas),len(bucket_ind)),'d')
+        for i,l in enumerate(bucket_ind):
+            U[l,i] = 1
+    elif flags_only:
+        U = None
+        avetoas = None
+        avetoaerrs = None
 
     if flags is not None:
         return avetoas, avetoaerrs, aveflags, U, bucket_ind
