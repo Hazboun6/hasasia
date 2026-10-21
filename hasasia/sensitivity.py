@@ -5,6 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import scipy.linalg as sl
+import scipy.integrate as si
 import os, pickle, jax, h5py
 from astropy import units as u
 jax.config.update("jax_enable_x64", True)
@@ -1902,7 +1903,7 @@ class GWBSensitivityCurve(SensitivityCurve):
         `self`.
         """
         integrand = Sh**2 / self.S_eff**2
-        return np.sqrt(2.0 * self.Tspan * np.trapz(y=integrand,
+        return np.sqrt(2.0 * self.Tspan * si.trapezoid(y=integrand,
                                                    x=self.freqs,
                                                    axis=0))
 
@@ -2328,7 +2329,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)
+        return si.trapezoid(integrand, axis=2, x=freqs)
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     r"""
@@ -2456,10 +2457,10 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
         fS_sqr = freqs**2 * S_eff**2
         integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
         integrand /= fS_sqr[:,np.newaxis]
-        fintegral = np.trapz(integrand, x=freqs,axis=0)
+        fintegral = si.trapezoid(integrand, x=freqs,axis=0)
     else:
         integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
-        fintegral = np.trapz(integrand, x=freqs)
+        fintegral = si.trapezoid(integrand, x=freqs)
 
     return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
 

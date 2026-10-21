@@ -184,7 +184,7 @@ class SkySensitivity(DeterSensitivityCurve):
         given signal.
         '''
         integrand = h_div_A[:,np.newaxis]**2 / self.S_eff
-        return SNR / np.sqrt(np.trapz(integrand,x=self.freqs,axis=0 ))
+        return SNR / np.sqrt(si.trapezoid(integrand,x=self.freqs,axis=0 ))
 
     def sky_response_full(self, iota, psi=None):
         r'''
@@ -502,7 +502,7 @@ class SkySensitivity(DeterSensitivityCurve):
                                             df=4,
                                             nc=(h0*snrs[:, :, fidx])**2)
         # perform the 2D integration using the trapezoidal method twice
-        return np.trapz(np.trapz(Z, iotas, axis=1), psis, axis=0)
+        return si.trapezoid(si.trapezoid(Z, iotas, axis=1), psis, axis=0)
     
     def sky_ave_SNR_gridded(self, iota, psi, fidxs=None):
         r'''
