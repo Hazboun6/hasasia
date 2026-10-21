@@ -5,6 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import scipy.linalg as sl
+import scipy.integrate as si
 import os, pickle, jax, h5py
 from astropy import units as u
 jax.config.update("jax_enable_x64", True)
@@ -227,6 +228,7 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
     Gmatrix : ndarray, optional
         Provide already calculated G-matrix. This can speed up calculations
         since the singular value decomposition can take time for large matrices.
+        
 
     Returns
     -------
@@ -284,7 +286,6 @@ def get_NcalInv(psr, nf=200, fmin=None, fmax=2e-7, freqs=None,
         return np.real(TfN)
     else:
         return np.real(np.diag(TfN)) / get_Tspan([psr])
-    
 
 def get_KIJ_Inv(spectra:list, rn_psrs:dict):
     r"""Timing model marginalized inverse covariance matrix.
@@ -1151,7 +1152,7 @@ class Spectrum(object):
         Optionally supply an array of frequencies over which to build the
         various spectral densities.
     """
-    def __init__(self, psr, amp_gw, gamma_gw, nf=400, fmin=None, fmax=2e-7,
+    def __init__(self, psr, amp_gw=None, gamma_gw=None, nf=400, fmin=None, fmax=2e-7,
                  freqs=None, tm_fit=True, **Tf_kwargs):
         self._H_0 = 72 * u.km / u.s / u.Mpc
         self.toas = psr.toas
@@ -1227,6 +1228,55 @@ class Spectrum(object):
             self._NcalInv = get_NcalInv(psr=self, freqs=self.freqs,
                                         tm_fit=self.tm_fit, Gmatrix=self.G)
         return self._NcalInv
+    
+    @NcalInv.setter
+    def NcalInv(self, value):
+        """
+        Use a setter to update the inverse noise weighted transmission function.
+        Currently can only use this with the approximation.
+        """
+        if value.shape != self.freqs.shape:
+            raise ValueError('Inverse Noise Weighted Transmission Function must have the same shape as freqs.')
+        self._NcalInv = value
+    
+    def update_NcalInv_with_approx(self, P_noise, Tf=None, return_NcalInv_approx=False):
+        r"""
+        Updates the NcalInv property with the following approximation: NcalInv = Tf/Pn(f).
+        See Figure 5 in [1]_ for the validity of this approximation.
+        This is a faster calculation, but less accurate than the full calculation.
+        The use case for this would be expediently updating sensitivity curves
+        with changes in the noise properties.
+
+        Parameters
+        ----------
+        Pnoise : ndarray
+            Provide already calculated noise power spectral density.
+            Need to be the same shape as the number of frequencies.
+        Tf : ndarray, optional
+            Provide already calculated transmission function. If None, it will be default to the
+            cached Tf property.
+        return_NcalInv_approx : bool, optional
+            Whether to return the approximate NcalInv. If False, the property is updated
+            and nothing is returned.
+        
+        Returns
+        -------
+        NcalInv_approx : ndarray
+            The approximate inverse noise weighted transmission function.
+        """
+        if Tf is None:
+            Tf = self.Tf # use cached Transmission function property
+        if Tf.shape != P_noise.shape:
+            raise ValueError('Transmission function and '
+                             'noise power spectral density must have the same shape.')
+        NcalInv_approx = Tf / P_noise
+        # update with the setter defined above
+        self.NcalInv = NcalInv_approx
+        # update S_I as well since this gets used in sensitivity curves (S_eff)
+        self.S_I = 1/resid_response(self.freqs)/self.NcalInv
+
+        if return_NcalInv_approx:
+            return self.NcalInv
 
     @property
     def P_n(self):
@@ -1248,6 +1298,12 @@ class Spectrum(object):
         if not hasattr(self, '_S_I'):
             self._S_I = 1/resid_response(self.freqs)/self.NcalInv
         return self._S_I
+
+    @S_I.setter
+    def S_I(self, value):
+        if value.shape != self.freqs.shape:
+            raise ValueError('Strain power sensitivity must have the same shape as freqs.')
+        self._S_I = value
     
     @property
     def partial_gamma_SI_Inv(self):
@@ -1848,7 +1904,7 @@ class GWBSensitivityCurve(SensitivityCurve):
         `self`.
         """
         integrand = Sh**2 / self.S_eff**2
-        return np.sqrt(2.0 * self.Tspan * np.trapz(y=integrand,
+        return np.sqrt(2.0 * self.Tspan * si.trapezoid(y=integrand,
                                                    x=self.freqs,
                                                    axis=0))
 
@@ -1958,7 +2014,14 @@ class DeterSensitivityCurve(SensitivityCurve):
 
     @property
     def S_eff(self):
-        """Strain power sensitivity. """
+        """
+        Sky-, inclination- and polarization-averaged strain power sensitivity.
+        NOTE: The prefactors are 4x larger than in Hazboun, et al., 2019 `[1]`_
+        because `h0` follows the PTA convention (see `skymap.h0_circ`), the
+        same as `SkySensitivity.S_eff`.
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
             elements = t_I[:,np.newaxis] / self.SnI
@@ -1972,7 +2035,7 @@ class DeterSensitivityCurve(SensitivityCurve):
                 summand = num[:,np.newaxis] * self.NcalInvIJ
                 summand *= resid_response(self.freqs)[np.newaxis,:]
                 sum2 = np.sum(summand, axis=0)
-            norm = 4./5 if self.pulsar_term else 2./5
+            norm = 16./5 if self.pulsar_term else 8./5
             self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff
 
@@ -2274,7 +2337,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)
+        return si.trapezoid(integrand, axis=2, x=freqs)
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1, flags_only=False):
     r"""
@@ -2409,10 +2472,10 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
         fS_sqr = freqs**2 * S_eff**2
         integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
         integrand /= fS_sqr[:,np.newaxis]
-        fintegral = np.trapz(integrand, x=freqs,axis=0)
+        fintegral = si.trapezoid(integrand, x=freqs,axis=0)
     else:
         integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
-        fintegral = np.trapz(integrand, x=freqs)
+        fintegral = si.trapezoid(integrand, x=freqs)
 
     return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
 

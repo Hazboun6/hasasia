@@ -91,6 +91,10 @@ def test_sensitivity_w_rednoise():
     spec.psd_prefit
     spec.psd_postfit
     spec.add_noise_power(spec.psd_prefit)
+    noise_power = spec.add_red_noise_power(A=6.8e-16,gamma=13/3., vals=True)
+    noise_power += spec.add_white_noise_power(sigma=2*1e-7,dt=14*365.25*24, vals=True)
+    spec.update_NcalInv_with_approx(noise_power)
+
     hsen.corr_from_psd(freqs, spec.psd_prefit, spec.toas)
 
     sc2a = hsen.GWBSensitivityCurve(spectra2)

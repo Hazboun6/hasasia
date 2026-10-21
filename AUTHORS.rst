@@ -11,4 +11,6 @@ Contributors
 ------------
 
 * Joseph D. Romano
-* Tristan L. Smith 
+* Tristan L. Smith
+* Jeremy G. Baier
+* Kyle Gourlie
