@@ -127,7 +127,8 @@ def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
     Parameters
     ----------
     h : float
-        The strain of the source.
+        The strain amplitude h0 of the source, in the PTA convention
+        used by `skymap.h0_circ` (inverse of that function).
     M_c : float
         The chirp mass of the source [Msun].
     f0 : float
@@ -138,7 +139,7 @@ def strain_and_chirp_mass_to_luminosity_distance(h, M_c, f0):
     D_L : float
         The luminosity distance to the source [Mpc].
     '''
-    return (4*c.c / (h * u.m/u.m)
+    return (2*c.c / (h * u.m/u.m)
             * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
             * np.power(np.pi * f0 * u.Hz, 2/3)).to('Mpc')
 

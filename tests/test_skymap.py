@@ -206,7 +206,8 @@ def test_pulsar_term_snr(spectra_theta_phi):
     SM = hsky.SkySensitivity(spectra, theta_gw, phi_gw, pulsar_term=False)
     hCirc = hsky.h0_circ(1e9,200,5e-9).to('')
 
-    assert (SM_pt.SNR(hCirc.value)/SM.SNR(hCirc.value)/np.sqrt(2)).all()
+    assert np.allclose(SM_pt.SNR(hCirc.value)/SM.SNR(hCirc.value), np.sqrt(2),
+                       rtol=1e-12, atol=0)
 
 
 def test_explicit_pulsar_term_skymap(spectra_theta_phi):

@@ -5,6 +5,7 @@ import numpy as np
 import itertools as it
 import scipy.stats as sps
 import scipy.linalg as sl
+import scipy.integrate as si
 import os, pickle, jax, h5py
 from astropy import units as u
 jax.config.update("jax_enable_x64", True)
@@ -1902,7 +1903,7 @@ class GWBSensitivityCurve(SensitivityCurve):
         `self`.
         """
         integrand = Sh**2 / self.S_eff**2
-        return np.sqrt(2.0 * self.Tspan * np.trapz(y=integrand,
+        return np.sqrt(2.0 * self.Tspan * si.trapezoid(y=integrand,
                                                    x=self.freqs,
                                                    axis=0))
 
@@ -2012,7 +2013,14 @@ class DeterSensitivityCurve(SensitivityCurve):
 
     @property
     def S_eff(self):
-        """Strain power sensitivity. """
+        """
+        Sky-, inclination- and polarization-averaged strain power sensitivity.
+        NOTE: The prefactors are 4x larger than in Hazboun, et al., 2019 `[1]`_
+        because `h0` follows the PTA convention (see `skymap.h0_circ`), the
+        same as `SkySensitivity.S_eff`.
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
             elements = t_I[:,np.newaxis] / self.SnI
@@ -2026,7 +2034,7 @@ class DeterSensitivityCurve(SensitivityCurve):
                 summand = num[:,np.newaxis] * self.NcalInvIJ
                 summand *= resid_response(self.freqs)[np.newaxis,:]
                 sum2 = np.sum(summand, axis=0)
-            norm = 4./5 if self.pulsar_term else 2./5
+            norm = 16./5 if self.pulsar_term else 8./5
             self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff
 
@@ -2328,7 +2336,7 @@ def corr_from_psdIJ(freqs, psd, toasI, toasJ, fast=True):
         t1, t2 = np.meshgrid(toasI, toasJ, indexing='ij')
         tm = np.abs(t1-t2)
         integrand = psd*np.cos(2*np.pi*freqs*tm[:,:,np.newaxis])#df*
-        return np.trapz(integrand, axis=2, x=freqs)
+        return si.trapezoid(integrand, axis=2, x=freqs)
 
 def quantize_fast(toas, toaerrs, flags=None, dt=0.1):
     r"""
@@ -2456,10 +2464,10 @@ def Agwb_from_Seff_plaw(freqs, Tspan, SNR, S_eff, gamma=13/3., alpha=None):
         fS_sqr = freqs**2 * S_eff**2
         integrand = (freqs[:,np.newaxis]/fyr)**(4*alpha)
         integrand /= fS_sqr[:,np.newaxis]
-        fintegral = np.trapz(integrand, x=freqs,axis=0)
+        fintegral = si.trapezoid(integrand, x=freqs,axis=0)
     else:
         integrand = (freqs/fyr)**(4*alpha) / freqs**2 / S_eff**2
-        fintegral = np.trapz(integrand, x=freqs)
+        fintegral = si.trapezoid(integrand, x=freqs)
 
     return np.sqrt(SNR)/np.power(2 * Tspan * fintegral, 1/4.)
 
