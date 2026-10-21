@@ -1,5 +1,5 @@
 numpy>=1.14
-scipy>=1.6
+scipy>=1.15
 astropy>=3.0
 jaxlib>=0.3.0
 jax[cpu]~=0.4

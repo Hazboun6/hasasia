@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = ['numpy',
-                'scipy',
+                'scipy>=1.15',
                 'astropy',
                 'jaxlib',
                 'jax',
