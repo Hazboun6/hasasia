@@ -23,9 +23,8 @@ folded into ``Mcal`` as in the paper (Eq. 19), so ``Mcal`` returns
 """
 from __future__ import annotations
 import numpy as np
-from scipy.special import sph_harm
+from scipy.special import sph_harm_y
 import healpy as hp
-import astropy.constants as c
 import itertools as it
 import warnings
 from .sensitivity import GWBSensitivityCurve, get_Tspan
@@ -121,12 +120,14 @@ def binned_stats(x_deg, y, bins=None, stat='mean'):
     return bin_centers, np.array(vals), np.array(lower), np.array(upper)
   
 def choose_nside_from_pairs(num_pairs: int) -> int:
+    r"""
+    Pick NSIDE from the number of pulsar pairs (Gersbach et al. 2025).
+
+    Uses :math:`N_\mathrm{side} \le [N_\mathrm{psr}(N_\mathrm{psr}-1)/24]^{1/2}
+    = (N_\mathrm{pair}/12)^{1/2}`, rounded down to a power of two, with a
+    floor of NSIDE = 2.
     """
-    Pick NSIDE such that NPIX ~ O(num_pairs/24) rounded down to nearest power-of-two NSIDE.
-    Your original heuristic mapped to NSIDE = 2**floor(log2(sqrt(num_pairs/24))).
-    """
-    # guard against small values
-    base = max(1, int(np.floor(np.log2(np.sqrt(num_pairs / 24.0)))))
+    base = max(1, int(np.floor(np.log2(np.sqrt(num_pairs / 12.0)))))
     return 2 ** base
 
 
@@ -166,13 +167,13 @@ def real_sph_harm_matrix(lmax, theta, phi):
     for l in range(lmax + 1):
         for m in range(-l, l+1):
             if m < 0:
-                Y_lm = sph_harm(-m, l, phi, theta)   # use |m| and take imag part
+                Y_lm = sph_harm_y(l, -m, theta, phi)   # use |m| and take imag part
                 Y_real = np.sqrt(2) * ((-1)**m) * Y_lm.imag
             elif m == 0:
-                Y_lm = sph_harm(0, l, phi, theta)
+                Y_lm = sph_harm_y(l, 0, theta, phi)
                 Y_real = Y_lm.real
             else:  # m > 0
-                Y_lm = sph_harm(m, l, phi, theta)
+                Y_lm = sph_harm_y(l, m, theta, phi)
                 Y_real = np.sqrt(2) * ((-1)**m) * Y_lm.real
 
             Y_rows.append(Y_real)
@@ -419,14 +420,15 @@ class SphHarmBasis(Basis):
         self.labels = labels
         return {"R_IJ": R_IJ_lm, "labels": labels, "lmax_used": lmax}
 
-    def clm_from_Pk(self, A, P_k):
+    def clm_from_Pk(self, A, P_k, normalize='npix'):
         """
         Project a pixel sky map P_k onto the spherical-harmonic power
-        coefficients c_lm (paper Eq. 36) via the inner product (1/NPIX) Σ_k.
+        coefficients c_lm via the inner product (1/NPIX) Σ_k, so that an
+        isotropic sky (P_k = 1, 'npix' convention) gives c_00 = 1.
+        ``normalize`` is the convention of the input P_k ('npix' or 'prob').
         Returns c_lm, labels.
         """
-        P_k = np.asarray(P_k, float)
-        P_k = P_k / P_k.sum()
+        P_k = _rescale_pk(np.asarray(P_k, float), normalize, A.NPIX)
         lmax = self._lmax_used if self._lmax_used is not None else self._choose_lmax(A)
         Ylm, labels = self._get_Ylm_matrix(A, lmax)
         c_lm = (1.0 / A.NPIX) * (Ylm @ P_k)
@@ -586,9 +588,9 @@ class Anisotropy(GWBSensitivityCurve):
     pol : {'gr'}
         Polarization model.  Currently only general-relativistic
         (transverse-traceless tensor) is supported.
-    pulsar_term : {False, 'explicit'}
-        If 'explicit', include the pulsar-term contribution using
-        per-pulsar distances `pdist`.  Default False (Earth-term only).
+    pulsar_term : False
+        Only the Earth term is implemented; any other value raises
+        NotImplementedError.
     NSIDE : int, optional
         HEALPix `N_side`.  If None, auto-selected from the pair count via
         `choose_nside_from_pairs(...)`.
@@ -608,12 +610,11 @@ class Anisotropy(GWBSensitivityCurve):
         self.theta_gw = theta_gw
         self.phi_gw = phi_gw
         self.pos = - khat(self.thetas, self.phis)
-        self.NPIX = hp.nside2npix(2 ** int(np.floor(np.log2(((len(spectra)*(len(spectra)-1))/24)**(1/2)))))
         self.Tspan = get_Tspan(spectra)
 
-        if pulsar_term == 'explicit':
-            self.pdists = np.array([(sp.pdist/c.c).to('s').value
-                                    for sp in spectra]) # Pulsar distances (light-travel time)
+        if pulsar_term:
+            raise NotImplementedError(
+                "Only the Earth term is implemented (pulsar_term=False).")
 
         # Return 3xN array of k, l, m GW position vectors.
         self.K = khat(self.theta_gw, self.phi_gw)
@@ -642,6 +643,11 @@ class Anisotropy(GWBSensitivityCurve):
             NSIDE = choose_nside_from_pairs(len(pairs))
         self.NSIDE = NSIDE
         self.NPIX = hp.nside2npix(NSIDE)
+        if np.size(theta_gw) != self.NPIX or np.size(phi_gw) != self.NPIX:
+            raise ValueError(
+                f"theta_gw/phi_gw must be the {self.NPIX} HEALPix pixel centers "
+                f"for NSIDE={NSIDE} (got {np.size(theta_gw)}); "
+                "use hp.pix2ang(NSIDE, np.arange(hp.nside2npix(NSIDE))).")
 
         # --- Basis selection (pass lmax/underlying through) ---
         self.basis_strategy = self._get_basis(basis, lmax=lmax, underlying=underlying)
@@ -747,8 +753,8 @@ class Anisotropy(GWBSensitivityCurve):
         r"""Per-pair strain noise PSD product, shape (N_pair, N_freq).
 
         Returns the geometric mean of the per-pulsar noise spectra,
-        :math:`S_I(f)\,S_J(f)`, for each pair `(I, J)`, with the same
-        frequency grid as `self.freqs`.
+        :math:`\sqrt{S_I(f)\,S_J(f)}`, for each pair `(I, J)`, with the same
+        frequency grid as `self.freqs`, so ``S_IJ**2`` is :math:`S_I S_J`.
         """
         if not hasattr(self, '_S_IJ'):
             ii = self.pairs[0]
@@ -766,6 +772,26 @@ class Anisotropy(GWBSensitivityCurve):
             return self.R_IJ
         else:
             return self.NPIX * self.R_IJ
+
+    def _is_pixel(self):
+        """True when the (underlying) basis is the pixel basis."""
+        strat = self.basis_strategy
+        if isinstance(strat, PrincipalMapBasis):
+            strat = strat.underlying
+        return isinstance(strat, PixelBasis)
+
+    def _sky_coeffs(self, Pk, normalize):
+        r"""Sky coefficients ``P`` and weight ``w`` with :math:`\Gamma_{IJ} = w\,R_\mathrm{phys} P`.
+
+        Pixel basis: ``Pk`` is a HEALPix map, rescaled to the 'npix'
+        convention, and ``w = 1/NPIX`` (paper Eq. 33).  Spherical-harmonic
+        bases: ``Pk`` is the vector of :math:`c_{\ell m}` (with
+        :math:`Y_{00}=1`, so :math:`c_{00}=1` is isotropic) and ``w = 1``.
+        """
+        Pk = np.asarray(Pk, dtype=float)
+        if self._is_pixel():
+            return _rescale_pk(Pk, normalize, self.NPIX), 1.0 / self.NPIX
+        return Pk, 1.0
 
     def Mcal(self, diag=True, freqs_idx=None):
         r"""Directional Fisher matrix :math:`\mathcal{M}(\hat\Omega,\hat\Omega';f)` (paper Eq. 19).
@@ -901,6 +927,11 @@ class Anisotropy(GWBSensitivityCurve):
         """
         if isinstance(self.basis_strategy, PrincipalMapBasis):
             return self.S_eff_pm_fk(freqs_idx=freqs_idx, rcond=rcond)
+        if isinstance(self.basis_strategy, SqrtSHBasis):
+            warnings.warn(
+                "The sqrt-SH coefficients a_LM enter P quadratically, so there "
+                "is no direct S_eff for them; returning the S_eff of the "
+                "ordinary c_lm (same as basis='sph_harm').", RuntimeWarning)
         if diag:
             M_kk = self.Mcal(diag=True)
             return np.clip(M_kk, 1e-30, None)**(-1/2)
@@ -1110,17 +1141,20 @@ class Anisotropy(GWBSensitivityCurve):
         With diag=True (radiometer, paper Eq. 26 integrand):
             SNR(f, k) = sqrt( (2 T_obs / NPIX^2) * S_h^2(f) * P_k^2 * Mcal_kk(f) )
 
-        With diag=False (full Fisher):
-            SNR(f, k) = |S_h(f) P_k| / ( NPIX^2 * sqrt( [Mcal^{-1}]_kk / T_obs ) )
+        With diag=False (full Fisher, same with 1/Mcal_kk -> [Mcal^{-1}]_kk):
+            SNR(f, k) = sqrt( (2 T_obs / NPIX^2) * S_h^2(f) * P_k^2 / [Mcal^{-1}]_kk(f) )
 
         with T_obs folded into Mcal (see :meth:`Mcal`).  The 1/NPIX^2 arises
         because R_IJ^k = R(Omega_k)/NPIX carries one factor of 1/NPIX, and the
-        SNR involves the signal squared.
+        SNR involves the signal squared.  In the spherical-harmonic bases
+        there is no 1/NPIX factor and ``Pk`` holds the c_lm.  The two branches
+        agree whenever Mcal is diagonal.
 
         Parameters
         ----------
-        Pk : ndarray, shape (Npix,)
-            Sky power map.
+        Pk : ndarray, shape (Nmodes,)
+            Sky power: a HEALPix map in the pixel basis, or the c_lm
+            (Y_00 = 1 normalization) in the spherical-harmonic bases.
         Sh : ndarray, shape (Nfreqs,)
             Strain power spectral density S_h(f).
         diag : bool
@@ -1139,16 +1173,15 @@ class Anisotropy(GWBSensitivityCurve):
             SVD regularization cutoff (only used when diag=False).
         """
         Sh = np.asarray(Sh, dtype=float)
-        Pk = _rescale_pk(np.asarray(Pk, dtype=float), normalize, self.NPIX)
+        Pk, w = self._sky_coeffs(Pk, normalize)
         if diag:
             M_kk = self.Mcal(diag=True)
-            return np.sqrt(2.0 * self.Tspan * (Sh[:, None]**2) * (Pk[None, :]**2) * M_kk / self.NPIX**2)
+            return np.sqrt(2.0 * self.Tspan * (Sh[:, None]**2) * (Pk[None, :]**2) * M_kk) * w
         else:
             M_inv_kk = self.Mcal_inv_diag(freqs_idx=freqs_idx, rcond=rcond)
             Sh_sel = Sh[freqs_idx] if freqs_idx is not None else Sh
-            P_clean = Sh_sel[:, None] * Pk[None, :]
-            sigma = np.sqrt(np.clip(M_inv_kk, 0.0, None) / self.Tspan)
-            return np.abs(P_clean / np.clip(sigma, 1e-30, None)) / self.NPIX**2
+            amp = np.abs(Sh_sel[:, None] * Pk[None, :]) * w
+            return np.sqrt(2.0 * self.Tspan) * amp / np.sqrt(np.clip(M_inv_kk, 1e-300, None))
 
     def S_clean(self, Pk, Sh, diag=True, normalize='npix', freqs_idx=None, rcond=1e-10):
         """
@@ -1167,16 +1200,25 @@ class Anisotropy(GWBSensitivityCurve):
         (diagonal Fisher only).  With diag=False, uses the full Fisher
         matrix with SVD-regularized inversion.
 
-        Formulas (T_obs folded into Mcal; paper Eqs. 29, 43):
-            P'_k    = S_h * P_k                            (expected clean map)
+        Formulas (T_obs folded into Mcal; paper Eqs. 27-29 and the
+        radiometer basis):
+            P'_k    = S_h * P_k / NPIX                     (expected clean map)
             sigma_k = 1/sqrt(T_obs * Mcal_kk)  [diag=True] (per-pixel uncertainty)
                     = sqrt([Mcal^{-1}]_kk / T_obs)  [diag=False]
             snr_k   = P'_k / sigma_k                        (map significance)
 
+        P'_k is what the paper's estimator X_k / (T_obs Mcal_kk) returns
+        for a sky with power only in pixel k, given the dirty map X of
+        Eq. 27 and <rho_IJ> = S_h Gamma_IJ.  The 1/NPIX is the pixel
+        quadrature weight in Gamma_IJ (Eq. 33); it is absent in the
+        spherical-harmonic bases, where ``Pk`` holds the c_lm.  With this
+        normalization ``snr_k = SNR_fk / sqrt(2)``.
+
         Parameters
         ----------
         Pk : ndarray, shape (Nmodes,)
-            Sky power distribution.
+            Sky power: a HEALPix map in the pixel basis, or the c_lm in the
+            spherical-harmonic bases.
         Sh : ndarray, shape (Nfreqs,)
             Strain power spectral density S_h(f).
         diag : bool
@@ -1194,15 +1236,16 @@ class Anisotropy(GWBSensitivityCurve):
         -------
         P_clean, sigma, snr : ndarrays, shape (Nfreqs, Nmodes) or (Nf_out, Nmodes)
         """
-        Pk = _rescale_pk(np.asarray(Pk, dtype=float), normalize, self.NPIX)
+        Sh = np.asarray(Sh, dtype=float)
+        Pk, w = self._sky_coeffs(Pk, normalize)
         if diag:
             M_kk = self.Mcal(diag=True)
-            P_clean = Sh[:, None] * Pk[None, :]
-            sigma = 1.0 / np.sqrt(np.clip(self.Tspan * M_kk, 1e-30, None))
+            P_clean = Sh[:, None] * Pk[None, :] * w
+            sigma = 1.0 / np.sqrt(np.clip(self.Tspan * M_kk, 1e-300, None))
         else:
             M_inv_kk = self.Mcal_inv_diag(freqs_idx=freqs_idx, rcond=rcond)
             Sh_sel = Sh[freqs_idx] if freqs_idx is not None else Sh
-            P_clean = Sh_sel[:, None] * Pk[None, :]
+            P_clean = Sh_sel[:, None] * Pk[None, :] * w
             sigma = np.sqrt(np.clip(M_inv_kk, 0.0, None) / self.Tspan)
 
         snr = P_clean / np.clip(sigma, 1e-30, None)
@@ -1224,8 +1267,8 @@ class Anisotropy(GWBSensitivityCurve):
         is the standard PTA sky-map estimator in Konstandin+2026 Eq. (3.16)
         and Chen+2026 Eqs. 17-18, 20.
 
-        In forecasting mode (known signal; T_obs folded into Mcal, paper Eq. 43):
-            P_hat_k(f) = S_h(f) * P_k                  (expected recovered map)
+        In forecasting mode (known signal; T_obs folded into Mcal):
+            P_hat_k(f) = S_h(f) * P_k / NPIX           (expected recovered map)
             sigma_k(f) = 1 / sqrt(T_obs * Mcal_kk(f))  (per-pixel uncertainty)
             snr_k(f)   = P_hat * sqrt(T_obs * Mcal_kk) (map significance, NOT detection SNR)
 
@@ -1267,10 +1310,16 @@ class Anisotropy(GWBSensitivityCurve):
 
         2. diag=False (full Fisher, paper Eq. 25):
             SNR^2_total = (2 T_obs/NPIX^2) * sum_f S_h^2(f) * P^T Mcal(f) P * df
+                        = 2 T_obs * sum_f S_h^2(f) * sum_IJ (T_IJ/T_obs) Gamma_IJ^2/(S_I S_J) * df
             Uses the full Fisher matrix including off-diagonal
-            correlations.  Always >= radiometer (Cauchy-Schwarz).  T_obs is
-            folded into Mcal (see :meth:`Mcal`), giving the paper's explicit
-            2 T_obs prefactor.
+            correlations, evaluated through the sky-weighted ORF Gamma_IJ so
+            no (Nmodes x Nmodes) matrix is built.  It is not ordered against
+            the radiometer total in general: the two agree for power in a
+            single pixel, full-Fisher is far larger for an isotropic sky, and
+            the radiometer is larger for power in anti-correlated pixels.
+            T_obs is folded into Mcal (see :meth:`Mcal`), giving the paper's
+            explicit 2 T_obs prefactor.  In the spherical-harmonic bases
+            there is no 1/NPIX^2 and ``Pk`` holds the c_lm.
 
         The 1/NPIX^2 arises because the pixel response R_IJ^k = R(Omega_k)/NPIX
         carries one factor of 1/NPIX, and the SNR involves the signal squared.
@@ -1294,7 +1343,8 @@ class Anisotropy(GWBSensitivityCurve):
         freqs_idx : array-like or None
             Frequency indices to use (default: all).
         rcond : float
-            SVD regularization cutoff (only used when diag=False).
+            Unused (the full-Fisher total needs no inversion); kept for
+            backward compatibility.
 
         Returns
         -------
@@ -1306,7 +1356,7 @@ class Anisotropy(GWBSensitivityCurve):
             decomposition plots).
         """
         Sh = np.asarray(Sh, dtype=float)
-        Pk = _rescale_pk(np.asarray(Pk, dtype=float), normalize, self.NPIX)
+        Pk, w = self._sky_coeffs(Pk, normalize)
 
         # Frequency spacing for integration (trapezoid rule)
         f = self.freqs
@@ -1319,15 +1369,14 @@ class Anisotropy(GWBSensitivityCurve):
             M_kk = self.Mcal(diag=True)
             if freqs_idx is not None:
                 M_kk = M_kk[freqs_idx]
-            snr2_f = 2.0 * self.Tspan * Sh**2 * np.sum(Pk**2 * M_kk, axis=1) / self.NPIX**2
+            snr2_f = 2.0 * self.Tspan * Sh**2 * np.sum(Pk**2 * M_kk, axis=1) * w**2
         else:
-            # Full Fisher: P^T Mcal(f) P at each frequency
-            nf = len(f)
-            snr2_f = np.zeros(nf)
-            fidx_list = freqs_idx if freqs_idx is not None else range(len(self.freqs))
-            for i, fi in enumerate(fidx_list):
-                M_full = self.Mcal(diag=False, freqs_idx=[fi])[0]  # (NPIX, NPIX)
-                snr2_f[i] = 2.0 * self.Tspan * Sh[i]**2 * Pk @ M_full @ Pk / self.NPIX**2
+            # Full Fisher: P^T Mcal(f) P w^2 = sum_IJ W_IJ(f) Gamma_IJ^2
+            Gamma = w * (self._R_phys() @ Pk)                       # (Npair,)
+            W_if = self.T_IJ[:, None] / (self.Tspan * self.S_IJ**2)  # (Npair, Nf)
+            if freqs_idx is not None:
+                W_if = W_if[:, freqs_idx]
+            snr2_f = 2.0 * self.Tspan * Sh**2 * (Gamma[:, None]**2 * W_if).sum(axis=0)
 
         # Integrate over frequency (trapezoid)
         df = np.diff(f)

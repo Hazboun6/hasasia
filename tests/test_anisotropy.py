@@ -273,3 +273,112 @@ def test_binned_stats():
     centers, central, lo, hi = haniso.binned_stats(x, y, bins=edges, stat='mean')
     assert len(centers) == len(central) == 10
     assert np.all(lo <= central + 1e-9) and np.all(hi >= central - 1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Numerical checks against closed forms and the paper's identities
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def A8(spectra):
+    """Pixel-basis object on a finer grid, for quadrature-sensitive checks."""
+    tg, pg = hp.pix2ang(8, np.arange(hp.nside2npix(8)))
+    return haniso.Anisotropy(spectra, tg, pg, NSIDE=8, basis='pixel')
+
+
+def test_real_sph_harm_closed_forms():
+    """Real SH match the Condon-Shortley closed forms for l <= 2."""
+    tg, pg = hp.pix2ang(8, np.arange(hp.nside2npix(8)))
+    x, y, z = np.sin(tg) * np.cos(pg), np.sin(tg) * np.sin(pg), np.cos(tg)
+    Y, labels = haniso.real_sph_harm_matrix(2, tg, pg)
+    Y = dict(zip(labels, Y))
+    c1, c2 = np.sqrt(3 / (4 * np.pi)), 0.5 * np.sqrt(15 / np.pi)
+    ref = {(0, 0): np.full_like(x, 0.5 / np.sqrt(np.pi)),
+           (1, -1): c1 * y, (1, 0): c1 * z, (1, 1): c1 * x,
+           (2, -2): c2 * x * y, (2, -1): c2 * y * z,
+           (2, 0): 0.25 * np.sqrt(5 / np.pi) * (3 * z**2 - 1),
+           (2, 1): c2 * x * z, (2, 2): 0.5 * c2 * (x**2 - y**2)}
+    for lm, val in ref.items():
+        np.testing.assert_allclose(Y[lm], val, atol=1e-12)
+
+
+def test_sky_average_response_is_hellings_downs(spectra, A8):
+    """Pixel sum of R_IJ^k and the SH monopole both give chi_IJ (Eqs. 9-10)."""
+    iso = hsen.GWBSensitivityCurve(spectra)
+    np.testing.assert_array_equal(A8.first, iso.pairs[0])
+    np.testing.assert_allclose(A8.R_IJ.sum(axis=1), iso.chiIJ, atol=5e-3)
+    tg, pg = hp.pix2ang(8, np.arange(hp.nside2npix(8)))
+    B = haniso.Anisotropy(spectra, tg, pg, NSIDE=8, basis='sph_harm', lmax=2)
+    np.testing.assert_allclose(B.R_IJ[:, 0], A8.R_IJ.sum(axis=1), rtol=1e-12)
+
+
+def test_isotropic_limit_matches_gwb_curve(spectra, A8):
+    """S_eff_P(P=1) and the full-Fisher SNR_total reproduce
+    GWBSensitivityCurve.S_eff / .SNR in the pixel and SH bases (Eq. 23)."""
+    iso = hsen.GWBSensitivityCurve(spectra)
+    Sh = hsen.S_h(A=A_GWB, alpha=-2 / 3, freqs=A8.freqs)
+    np.testing.assert_allclose(A8.S_eff_P(np.ones(A8.NPIX)), iso.S_eff, rtol=2e-3)
+    snr_pix, _ = A8.SNR_total(np.ones(A8.NPIX), Sh, diag=False)
+    np.testing.assert_allclose(snr_pix, iso.SNR(Sh), rtol=2e-3)
+    tg, pg = hp.pix2ang(8, np.arange(hp.nside2npix(8)))
+    B = haniso.Anisotropy(spectra, tg, pg, NSIDE=8, basis='sph_harm', lmax=2)
+    c = np.zeros(B.R_IJ.shape[1])
+    c[0] = 1.0
+    snr_sh, _ = B.SNR_total(c, Sh, diag=False)
+    np.testing.assert_allclose(snr_sh, snr_pix, rtol=1e-10)
+    np.testing.assert_allclose(B.Mcal(diag=True)[:, 0]**-0.5,
+                               A8.S_eff_P(np.ones(A8.NPIX)), rtol=1e-10)
+    c_lm, _ = B.basis_strategy.clm_from_Pk(B, np.ones(B.NPIX))
+    np.testing.assert_allclose(c_lm[0], 1.0, rtol=1e-12)
+
+
+def test_SNR_total_full_equals_PMP(ASM):
+    """The pair-sum full-Fisher total equals P^T Mcal P / NPIX^2 (Eq. 25)."""
+    Pk, *_ = ASM.injection(NSIDE=NSIDE, theta=1.0, phi=2.0, steepness=5.0,
+                           rng=np.random.default_rng(1))
+    Sh = hsen.S_h(A=A_GWB, alpha=-2 / 3, freqs=ASM.freqs)
+    _, snr2_f = ASM.SNR_total(Pk, Sh, diag=False)
+    M = ASM.Mcal(diag=False)
+    ref = 2 * ASM.Tspan * Sh**2 * np.einsum('k,fkl,l->f', Pk, M, Pk) / NPIX**2
+    np.testing.assert_allclose(snr2_f, ref, rtol=1e-10)
+
+
+def test_SNR_fk_branches_consistent(ASM):
+    """Full-Fisher and radiometer per-pixel SNR differ only by
+    sqrt(M_kk [M^-1]_kk), so they agree when Mcal is diagonal."""
+    Pk, *_ = ASM.injection(NSIDE=NSIDE, theta=1.0, phi=2.0, steepness=5.0,
+                           rng=np.random.default_rng(1))
+    Sh = hsen.S_h(A=A_GWB, alpha=-2 / 3, freqs=ASM.freqs)
+    rad = ASM.SNR_fk(Pk, Sh, diag=True)
+    full = ASM.SNR_fk(Pk, Sh, diag=False)
+    gap = np.sqrt(ASM.Mcal(diag=True) * ASM.Mcal_inv_diag())
+    np.testing.assert_allclose(full * gap, rad, rtol=1e-8)
+
+
+def test_S_clean_matches_dirty_map_estimator(ASM):
+    """For power in one pixel, S_clean's P_clean equals the paper's
+    radiometer estimate X_k / (T_obs M_kk) built from the dirty map (Eq. 27),
+    and its snr is SNR_fk / sqrt(2)."""
+    k0, fi = 17, len(ASM.freqs) // 2
+    Pk = np.zeros(NPIX)
+    Pk[k0] = NPIX
+    Sh = hsen.S_h(A=A_GWB, alpha=-2 / 3, freqs=ASM.freqs)
+    W = ASM.T_IJ / ASM.S_IJ[:, fi]**2
+    rho = Sh[fi] * (ASM.R_IJ @ Pk)                    # <rho_IJ> = S_h Gamma_IJ
+    X = (NPIX * ASM.R_IJ).T @ (W * rho)
+    P_hat = X / (ASM.Tspan * ASM.Mcal(diag=True)[fi])
+    P_clean, sigma, snr = ASM.S_clean(Pk, Sh, diag=True)
+    np.testing.assert_allclose(P_clean[fi, k0], P_hat[k0], rtol=1e-10)
+    np.testing.assert_allclose(snr * np.sqrt(2), ASM.SNR_fk(Pk, Sh), rtol=1e-10)
+
+
+def test_choose_nside_matches_paper_bound():
+    """N_side <= sqrt(Npsr(Npsr-1)/24), rounded down to a power of two."""
+    for n in (12, 30, 45, 50, 68, 90, 115, 157):
+        paper = 2 ** int(np.floor(np.log2(np.sqrt(n * (n - 1) / 24))))
+        assert haniso.choose_nside_from_pairs(n * (n - 1) // 2) == max(paper, 2)
+
+
+def test_sky_grid_must_match_nside(spectra):
+    tg, pg = hp.pix2ang(8, np.arange(hp.nside2npix(8)))
+    with pytest.raises(ValueError):
+        haniso.Anisotropy(spectra, tg, pg, NSIDE=4)
