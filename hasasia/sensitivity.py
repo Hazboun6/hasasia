@@ -2013,7 +2013,14 @@ class DeterSensitivityCurve(SensitivityCurve):
 
     @property
     def S_eff(self):
-        """Strain power sensitivity. """
+        """
+        Sky-, inclination- and polarization-averaged strain power sensitivity.
+        NOTE: The prefactors are 4x larger than in Hazboun, et al., 2019 `[1]`_
+        because `h0` follows the PTA convention (see `skymap.h0_circ`), the
+        same as `SkySensitivity.S_eff`.
+
+        .. _[1]: https://arxiv.org/abs/1907.04341
+        """
         if not hasattr(self, '_S_eff'):
             t_I = self.T_I / self.Tspan
             elements = t_I[:,np.newaxis] / self.SnI
@@ -2027,7 +2034,7 @@ class DeterSensitivityCurve(SensitivityCurve):
                 summand = num[:,np.newaxis] * self.NcalInvIJ
                 summand *= resid_response(self.freqs)[np.newaxis,:]
                 sum2 = np.sum(summand, axis=0)
-            norm = 4./5 if self.pulsar_term else 2./5
+            norm = 16./5 if self.pulsar_term else 8./5
             self._S_eff = np.power(norm * sum1,-1)
         return self._S_eff
 

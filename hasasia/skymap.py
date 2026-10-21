@@ -586,13 +586,12 @@ class SkySensitivity(DeterSensitivityCurve):
 
     @property
     def S_eff_mean(self):
-        """Strain power sensitivity. """
+        """
+        Sky-averaged strain power sensitivity, 1 / <1/S_eff> over the sky
+        positions in this map. Uses the same normalization as `S_eff`.
+        """
         if not hasattr(self, '_S_eff_mean'):
-            mean_sky = np.mean(np.sum(self.S_SkyI, axis=1), axis=1)
-            if self.pulsar_term:
-                self._S_eff_mean = 1.0 / (4./5 * mean_sky)
-            else:
-                self._S_eff_mean = 1.0 / (12./5 * mean_sky)
+            self._S_eff_mean = 1.0 / np.mean(1.0 / self.S_eff, axis=1)
         return self._S_eff_mean
 
     def calculate_detection_volume(self, f0, SNR_threshold=3.7145, M_c=1e9):
@@ -669,8 +668,21 @@ def h_circ(M_c, D_L, f0, Tspan, f):
                                             + np.sinc(Tspan*(f+f0)))
 
 def h0_circ(M_c, D_L, f0):
-    """Amplitude of a circular super-massive binary black hole."""
-    return (4*c.c / (D_L * u.Mpc)
+    r"""
+    Amplitude of a circular super-massive binary black hole, in the PTA
+    convention where the polarization amplitudes are
+    :math:`A_+ = h_0 (1+\cos^2\iota)` and :math:`A_\times = 2 h_0 \cos\iota`.
+
+    .. math::
+        h_0 = \frac{2 (G\mathcal{M})^{5/3} (\pi f_0)^{2/3}}{c^4 D_L}
+
+    This is half the :math:`h_0` used in Hazboun, et al., 2019 `[1]`_, and
+    matches the normalization of `SkySensitivity.S_eff` and
+    `DeterSensitivityCurve.S_eff`.
+
+    .. _[1]: https://arxiv.org/abs/1907.04341
+    """
+    return (2*c.c / (D_L * u.Mpc)
             * np.power(c.G * M_c * u.Msun/c.c**3, 5/3)
             * np.power(np.pi * f0 * u.Hz, 2/3))
 
