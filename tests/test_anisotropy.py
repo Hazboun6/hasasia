@@ -138,6 +138,23 @@ def test_sqrt_sph_harm_positivity(spectra, sky):
     assert np.all(Pk >= 0)
 
 
+def test_sqrt_sph_harm_normalization(spectra, sky):
+    """sqrt-SH helpers use the 'npix' convention: an isotropic sky gives
+    a_00 = 1, and the reconstructed map sums to NPIX ('prob': to 1)."""
+    tg, pg = sky
+    A = haniso.Anisotropy(spectra, tg, pg, NSIDE=NSIDE, basis='sqrt_sph_harm',
+                          lmax=2)
+    strat = A.basis_strategy
+    a_LM, _ = strat.alm_from_Pk(A, np.ones(NPIX))
+    np.testing.assert_allclose(a_LM[0], 1.0, rtol=1e-12)
+    a_prob, _ = strat.alm_from_Pk(A, np.ones(NPIX) / NPIX, normalize='prob')
+    np.testing.assert_allclose(a_prob, a_LM, rtol=1e-12, atol=1e-15)
+    np.testing.assert_allclose(strat.Pk_from_alm(A, a_LM).sum(), NPIX,
+                               rtol=1e-12)
+    np.testing.assert_allclose(
+        strat.Pk_from_alm(A, a_LM, normalize='prob').sum(), 1.0, rtol=1e-12)
+
+
 # ---------------------------------------------------------------------------
 # Principal-map (Fisher-eigenmap) basis
 # ---------------------------------------------------------------------------

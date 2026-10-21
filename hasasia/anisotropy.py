@@ -453,7 +453,7 @@ class SqrtSHBasis(SphHarmBasis):
             return f"SqrtSHBasis(Lmax={lmax})"
         return "SqrtSHBasis(Lmax=?)"
 
-    def Pk_from_alm(self, A, a_LM):
+    def Pk_from_alm(self, A, a_LM, normalize='npix'):
         """Compute pixel-space P_k from sqrt-SH coefficients.
 
         P_k = [Σ_LM a_LM Ylm^LM(Ω_k)]²
@@ -464,41 +464,52 @@ class SqrtSHBasis(SphHarmBasis):
             Parent object (provides NSIDE, NPIX).
         a_LM : ndarray, shape (Nlm,)
             Square-root SH coefficients.
+        normalize : {'npix', 'prob'}
+            Convention of the returned map: 'npix' (default) rescales it
+            to sum(P_k) == NPIX, the convention of `injection` and the
+            other methods, and 'prob' rescales it to sum(P_k) == 1.
 
         Returns
         -------
         P_k : ndarray, shape (NPIX,)
-            Pixel power map, normalized to sum=1.
+            Pixel power map in the requested convention.
         """
+        norm = normalize.lower()
+        if norm not in ('npix', 'prob'):
+            raise ValueError("normalize must be 'npix' or 'prob'")
         lmax = self._lmax_used if self._lmax_used is not None else self._choose_lmax(A)
         Ylm, _ = self._get_Ylm_matrix(A, lmax)
         q_k = Ylm.T @ a_LM         # (NPIX,) amplitude field
         P_k = q_k ** 2             # non-negative by construction
         total = P_k.sum()
         if total > 0:
-            P_k /= total
+            P_k *= (A.NPIX if norm == 'npix' else 1.0) / total
         return P_k
 
-    def alm_from_Pk(self, A, P_k):
+    def alm_from_Pk(self, A, P_k, normalize='npix'):
         """Project pixel power map to sqrt-SH coefficients.
 
         Takes sqrt of P_k, then projects onto Ylm. This is approximate:
-        √P_k may not be band-limited to L_max.
+        √P_k may not be band-limited to L_max.  In the 'npix' convention an
+        isotropic sky (P_k = 1) gives a_00 = 1, matching c_00 = 1 in the
+        spherical-harmonic basis.
 
         Parameters
         ----------
         A : Anisotropy
             Parent object.
         P_k : ndarray, shape (NPIX,)
-            Pixel power map (sum=1, P_k ≥ 0).
+            Pixel power map (P_k ≥ 0).
+        normalize : {'npix', 'prob'}
+            Convention of the input ``P_k``: 'npix' (default, sum == NPIX)
+            or 'prob' (sum == 1, rescaled by NPIX internally).
 
         Returns
         -------
         a_LM : ndarray, shape (Nlm,)
         labels : list of (l, m) tuples
         """
-        P_k = np.asarray(P_k, float)
-        P_k = P_k / P_k.sum()
+        P_k = _rescale_pk(np.asarray(P_k, float), normalize, A.NPIX)
         lmax = self._lmax_used if self._lmax_used is not None else self._choose_lmax(A)
         Ylm, labels = self._get_Ylm_matrix(A, lmax)
         q_k = np.sqrt(np.clip(P_k, 0.0, None))
@@ -582,9 +593,11 @@ class Anisotropy(GWBSensitivityCurve):
     theta_gw, phi_gw : array-like, shape (NPIX,)
         HEALPix pixel-center coordinates (colatitude, longitude) for the
         GW sky grid.
-    basis : {'pixel', 'sph_harm', 'sqrt_sph_harm', 'radiometer'}
+    basis : {'pixel', 'sph_harm', 'sqrt_sph_harm', 'principal_map'}
         Sky-decomposition basis.  Defaults to 'pixel'.  The basis can be
-        changed in place via `set_basis(...)`.
+        changed in place via `set_basis(...)`.  The paper's radiometer
+        basis is not a separate value here: it is the ``diag=True``
+        (diagonal-Fisher) option of the methods below.
     pol : {'gr'}
         Polarization model.  Currently only general-relativistic
         (transverse-traceless tensor) is supported.
@@ -595,8 +608,12 @@ class Anisotropy(GWBSensitivityCurve):
         HEALPix `N_side`.  If None, auto-selected from the pair count via
         `choose_nside_from_pairs(...)`.
     lmax : int, optional
-        Maximum SH multipole (used by `SphHarmBasis` and `SqrtSHBasis`).
+        Maximum SH multipole (used by `SphHarmBasis` and `SqrtSHBasis`, and
+        by `PrincipalMapBasis` when its underlying basis is 'sph_harm').
         If None, defaults to floor(sqrt(N_psrs)).
+    underlying : {'pixel', 'sph_harm'}, optional
+        Underlying basis eigendecomposed by the 'principal_map' basis
+        (ignored otherwise).  Defaults to 'pixel'.
 
     Notes
     -----
@@ -856,7 +873,7 @@ class Anisotropy(GWBSensitivityCurve):
 
         The full-Fisher variance term: :math:`[\mathcal{M}^{-1}(f)]_{kk}`, whose
         square root is the full-Fisher sensitivity (Eq. 21) and, scaled by
-        :math:`1/\sqrt{T_\mathrm{obs}}`, the clean-map uncertainty (Eq. 29).
+        :math:`1/\sqrt{T_\mathrm{obs}}`, the clean-map uncertainty (Eq. 30).
         :math:`T_\mathrm{obs}` is folded into :math:`\mathcal{M}` (see
         :meth:`Mcal`).  Uses an SVD-regularized pseudo-inverse.
 
@@ -922,7 +939,7 @@ class Anisotropy(GWBSensitivityCurve):
         -----
         In the ``'principal_map'`` basis this dispatches to
         :meth:`S_eff_pm_fk`, returning the per-eigenmode sensitivity
-        :math:`1/\sqrt{\lambda_n}=\Sigma_n` (Eq. 47); ``diag`` is ignored
+        :math:`1/\sqrt{\lambda_n}=\Sigma_n` (Eq. 49); ``diag`` is ignored
         since the two estimators coincide.
         """
         if isinstance(self.basis_strategy, PrincipalMapBasis):
@@ -1063,7 +1080,7 @@ class Anisotropy(GWBSensitivityCurve):
         r"""Per-eigenmode effective sensitivity in the principal-map basis.
 
         :math:`S_\mathrm{eff}(f,n) = 1/\sqrt{\lambda_n(f)} = \Sigma_n(f)`
-        (paper Eq. 47), a single value per mode since the radiometer and
+        (paper Eq. 49), a single value per mode since the radiometer and
         full-Fisher estimators coincide in the Fisher eigenbasis.  The
         eigenvalues :math:`\lambda_n` are those of :math:`\mathcal{M}` with
         :math:`T_\mathrm{obs}` folded in (see :meth:`Mcal`).  Columns are
@@ -1200,8 +1217,8 @@ class Anisotropy(GWBSensitivityCurve):
         (diagonal Fisher only).  With diag=False, uses the full Fisher
         matrix with SVD-regularized inversion.
 
-        Formulas (T_obs folded into Mcal; paper Eqs. 27-29 and the
-        radiometer basis):
+        Formulas (T_obs folded into Mcal; paper Eqs. 28-30 and the
+        radiometer basis, Eq. 45):
             P'_k    = S_h * P_k / NPIX                     (expected clean map)
             sigma_k = 1/sqrt(T_obs * Mcal_kk)  [diag=True] (per-pixel uncertainty)
                     = sqrt([Mcal^{-1}]_kk / T_obs)  [diag=False]
@@ -1209,7 +1226,7 @@ class Anisotropy(GWBSensitivityCurve):
 
         P'_k is what the paper's estimator X_k / (T_obs Mcal_kk) returns
         for a sky with power only in pixel k, given the dirty map X of
-        Eq. 27 and <rho_IJ> = S_h Gamma_IJ.  The 1/NPIX is the pixel
+        Eq. 28 and <rho_IJ> = S_h Gamma_IJ.  The 1/NPIX is the pixel
         quadrature weight in Gamma_IJ (Eq. 33); it is absent in the
         spherical-harmonic bases, where ``Pk`` holds the c_lm.  With this
         normalization ``snr_k = SNR_fk / sqrt(2)``.
@@ -1257,9 +1274,11 @@ class Anisotropy(GWBSensitivityCurve):
 
         NOTE: This returns the **map-making significance** — how many sigma
         above zero the clean-map estimate is at each pixel.  This is
-        different from ``SNR_fk``, which returns the **detection SNR**
-        (includes the 1/NPIX^2 normalization for the GWB detection
-        statistic).  For detection forecasts, use ``SNR_fk`` or
+        different from ``SNR_fk``, which returns the **detection SNR**.
+        For the same sky the two differ by a factor of sqrt(2)
+        (``snr = SNR_fk / sqrt(2)``), because the detection SNR carries
+        2 T_obs (paper Eq. 26) and the map uncertainty carries T_obs
+        (paper Eq. 45).  For detection forecasts, use ``SNR_fk`` or
         ``SNR_total``.
 
         The radiometer treats each pixel/mode as an independent point
@@ -1305,7 +1324,7 @@ class Anisotropy(GWBSensitivityCurve):
 
         Two modes:
 
-        1. diag=True (radiometer, paper Eq. 26):
+        1. diag=True (radiometer, paper Eq. 27):
             SNR^2_total = (2 T_obs/NPIX^2) * sum_f S_h^2(f) * sum_k P_k^2 * Mcal_kk(f) * df
 
         2. diag=False (full Fisher, paper Eq. 25):
@@ -1388,7 +1407,7 @@ class Anisotropy(GWBSensitivityCurve):
     def h_c(self):
         r"""Directional characteristic-strain sensitivity, shape (N_freq, N_modes).
 
-        Per-mode radiometer characteristic strain (paper Eq. 49),
+        Per-mode radiometer characteristic strain (paper Eq. 51),
         :math:`h_c^\mathrm{rad}(f,\hat\Omega_k)=\sqrt{f\,S_\mathrm{eff}^\mathrm{rad}(f,\hat\Omega_k)}`,
         built from the diagonal-Fisher :meth:`S_eff_fk`.  The mode axis follows
         the active basis (pixel ``k`` / multipole ``(l, m)`` / eigenmode ``n``).
